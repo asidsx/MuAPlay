@@ -106,14 +106,26 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
             className="hidden"
           />
 
-          <button
-            onClick={triggerFolderPicker}
-            disabled={isScanning}
-            className="px-3.5 py-2 bg-gradient-to-r from-[#7C4DFF] to-[#00E5FF] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-purple-500/20 transition-all disabled:opacity-50"
-          >
-            <FolderSearch className="w-4 h-4 text-white" />
-            <span>Выбрать папку</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={onScanDownloadsFolder}
+              disabled={isScanning}
+              className="px-3 py-2 bg-gradient-to-r from-[#7C4DFF] to-[#00E5FF] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-purple-500/20 transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+              <span>{isScanning ? 'Сканирование...' : 'Сканировать'}</span>
+            </button>
+
+            <button
+              onClick={triggerFolderPicker}
+              disabled={isScanning}
+              title="Открыть системный проводник папок"
+              className="px-2.5 py-2 bg-[#1A1A1A] hover:bg-[#252525] border border-[#222222] text-[#E0E0E0] font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all disabled:opacity-50"
+            >
+              <FolderSearch className="w-3.5 h-3.5 text-[#00E5FF]" />
+              <span className="hidden sm:inline">Папка</span>
+            </button>
+          </div>
         </div>
 
         {/* Quick Actions: Dropzone & Auto Cover Art */}

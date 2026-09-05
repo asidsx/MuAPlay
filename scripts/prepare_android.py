@@ -17,7 +17,12 @@ def configure_android():
 
     main_activity_code = '''package com.muaplay.app;
 
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -31,6 +36,25 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         instance = this;
+
+        // 1. Запрос разрешения на уведомления (Android 13+ / API 33)
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
+            }
+        }
+
+        // 2. Запуск нативного фонового сервиса воспроизведения
+        try {
+            Intent serviceIntent = new Intent(this, AudioForegroundService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void dispatchAudioAction(String action) {
@@ -59,11 +83,23 @@ public class AudioForegroundService extends Service {
     public static final String CHANNEL_ID = "muaplay_playback_channel";
     public static final int NOTIFICATION_ID = 1001;
     private MediaSessionCompat mediaSession;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createChannel();
+
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MuAPlay::AudioWakeLock");
+                wakeLock.acquire(10 * 60 * 60 * 1000L); // 10 часов макс
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         mediaSession = new MediaSessionCompat(this, "MuAPlay_MediaSession");
         mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS | MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
         mediaSession.setCallback(new MediaSessionCompat.Callback() {
@@ -81,7 +117,7 @@ public class AudioForegroundService extends Service {
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "MuAPlay Воспроизведение", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "MuAPlay Фоновое воспроизведение", NotificationManager.IMPORTANCE_LOW);
             ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             getSystemService(NotificationManager.class).createNotificationChannel(ch);
         }
@@ -92,8 +128,10 @@ public class AudioForegroundService extends Service {
         PendingIntent pToggle = PendingIntent.getService(this, 0, new Intent(this, AudioForegroundService.class), PendingIntent.FLAG_IMMUTABLE);
         
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("MuAPlay")
+            .setContentTitle("MuAPlay Плеер")
+            .setContentText("Фоновое воспроизведение активно")
             .setSmallIcon(android.R.drawable.ic_media_play)
+            .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setStyle(new MediaStyle().setMediaSession(mediaSession.getSessionToken()).setShowActionsInCompactView(0, 1, 2))
             .build();
@@ -104,6 +142,17 @@ public class AudioForegroundService extends Service {
             startForeground(NOTIFICATION_ID, notification);
         }
         return START_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+        if (mediaSession != null) {
+            mediaSession.release();
+        }
+        super.onDestroy();
     }
 
     @Override public IBinder onBind(Intent intent) { return null; }

@@ -97,6 +97,12 @@ export default function App() {
 
   // Persist State to LocalStorage
   useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem('android_music_tracks', JSON.stringify(tracks));
   }, [tracks]);
 

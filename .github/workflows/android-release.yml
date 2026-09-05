@@ -66,12 +66,12 @@ jobs:
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
-            --out android/app/build/outputs/apk/release/MuAPlay-v1.0-release.apk \
+            --out android/app/build/outputs/apk/release/MuAPlay.apk \
             android/app/build/outputs/apk/release/app-release-aligned.apk
 
       - name: Upload Signed APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: android/app/build/outputs/apk/release/MuAPlay-v1.0-release.apk
+          files: android/app/build/outputs/apk/release/MuAPlay.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
