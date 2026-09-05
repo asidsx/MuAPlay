@@ -11,9 +11,37 @@ def configure_android():
             with open(build_gradle, 'w', encoding='utf-8') as f:
                 f.write(content)
 
-    # 2. Нативный сервис виджета управления: AudioForegroundService.java
+    # 2. MainActivity.java и Нативный сервис AudioForegroundService.java
     java_dir = 'android/app/src/main/java/com/muaplay/app'
     os.makedirs(java_dir, exist_ok=True)
+
+    main_activity_code = '''package com.muaplay.app;
+
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    private static MainActivity instance;
+
+    public static MainActivity getInstance() {
+        return instance;
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        instance = this;
+    }
+
+    public void dispatchAudioAction(String action) {
+        if (getBridge() != null) {
+            getBridge().triggerJSEvent("muaplayAudioAction", "window", "{ \\"action\\": \\"" + action + "\\" }");
+        }
+    }
+}
+'''
+    with open(os.path.join(java_dir, 'MainActivity.java'), 'w', encoding='utf-8') as f:
+        f.write(main_activity_code)
     
     service_code = '''package com.muaplay.app;
 
@@ -97,13 +125,15 @@ public class AudioForegroundService extends Service {
             '<uses-permission android:name="android.permission.WAKE_LOCK" />'
         ]
 
-        for perm in permissions:
-            if perm not in m_content:
-                m_content = m_content.replace('<manifest', f'<manifest\n    {perm}\n')
+        # Insert permissions safely before <application>
+        permissions_to_add = [p for p in permissions if p not in m_content]
+        if permissions_to_add and '<application' in m_content:
+            perm_block = "\n    " + "\n    ".join(permissions_to_add) + "\n"
+            m_content = m_content.replace('<application', f'{perm_block}\n    <application', 1)
 
-        if 'AudioForegroundService' not in m_content:
+        if 'AudioForegroundService' not in m_content and '</application>' in m_content:
             service_decl = '    <service android:name="com.muaplay.app.AudioForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />\n</application>'
-            m_content = m_content.replace('</application>', service_decl)
+            m_content = m_content.replace('</application>', service_decl, 1)
 
         with open(manifest, 'w', encoding='utf-8') as f:
             f.write(m_content)
