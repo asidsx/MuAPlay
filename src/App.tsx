@@ -51,17 +51,19 @@ export default function App() {
     });
   };
 
-  // Media Data State
+  // Media Data State (starts 100% clean without demo tracks)
   const [tracks, setTracks] = useState<Track[]>(() => {
     const saved = localStorage.getItem('android_music_tracks');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Clean out legacy demo track IDs if present
+        return parsed.filter((t: Track) => !t.id.startsWith('track-') || t.id.startsWith('track-upload-') || t.id.length > 15);
       } catch {
-        return INITIAL_TRACKS;
+        return [];
       }
     }
-    return INITIAL_TRACKS;
+    return [];
   });
 
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
@@ -70,16 +72,16 @@ export default function App() {
       try {
         return JSON.parse(saved);
       } catch {
-        return INITIAL_PLAYLISTS;
+        return [];
       }
     }
-    return INITIAL_PLAYLISTS;
+    return [];
   });
 
-  const [downloadFiles, setDownloadFiles] = useState<ScannedFile[]>(DOWNLOADS_FOLDER_FILES);
+  const [downloadFiles, setDownloadFiles] = useState<ScannedFile[]>([]);
 
   // Player State
-  const [currentTrackId, setCurrentTrackId] = useState<string | null>('track-1');
+  const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(184);
@@ -477,7 +479,42 @@ export default function App() {
 
             {/* Track List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {filteredTracks.map((track) => {
+              {filteredTracks.length === 0 ? (
+                <div className="py-16 px-4 text-center space-y-4 my-auto">
+                  <div className="w-16 h-16 mx-auto rounded-3xl bg-[#121212] border border-[#1F1F1F] flex items-center justify-center text-[#7C4DFF] shadow-inner">
+                    <Music className="w-8 h-8 text-[#7C4DFF]" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-[#E0E0E0]">Медиатека пуста</h3>
+                    <p className="text-xs text-[#777777] max-w-xs mx-auto">
+                      Загрузите файлы с устройства или просканируйте папку Загрузки для автоматического добавления аудиозаписей.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+                    <button
+                      onClick={() => setActiveTab('downloads')}
+                      className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-[#7C4DFF] to-[#00E5FF] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
+                    >
+                      <FolderDown className="w-4 h-4" />
+                      <span>Открыть Загрузки</span>
+                    </button>
+
+                    <label className="w-full sm:w-auto px-4 py-2 bg-[#121212] hover:bg-[#1A1A1A] border border-[#222222] text-[#E0E0E0] font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                      <Plus className="w-4 h-4 text-[#00E5FF]" />
+                      <span>Выбрать файлы</span>
+                      <input
+                        type="file"
+                        multiple
+                        accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
+                        onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                filteredTracks.map((track) => {
                 const isCurrent = currentTrackId === track.id;
 
                 return (
@@ -555,7 +592,7 @@ export default function App() {
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
           </div>
         )}
