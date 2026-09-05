@@ -61,11 +61,14 @@ jobs:
             android/app/build/outputs/apk/release/app-release-unsigned.apk \
             android/app/build/outputs/apk/release/app-release-aligned.apk
           
-          # 3. Подпись APK через apksigner
+          # 3. Подпись APK через apksigner с полной поддержкой схем v1, v2 и v3
           $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore \
             --ks-key-alias muaplay_alias \
             --ks-pass pass:muaplaysimplepass \
             --key-pass pass:muaplaysimplepass \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
             --out android/app/build/outputs/apk/release/MuAPlay-v1.0-release.apk \
             android/app/build/outputs/apk/release/app-release-aligned.apk
 

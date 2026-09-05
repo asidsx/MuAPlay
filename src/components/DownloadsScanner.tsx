@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FolderDown, RefreshCw, UploadCloud, Sparkles, Play, Square, CheckCircle2, Music, ShieldCheck, FileAudio, Disc } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { FolderDown, RefreshCw, UploadCloud, Sparkles, Play, Square, CheckCircle2, Music, ShieldCheck, FileAudio, Disc, FolderSearch } from 'lucide-react';
 import { ScannedFile, Track } from '../types/music';
 import { audioEngine } from '../services/audioEngine';
 
@@ -26,6 +26,15 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
 }) => {
   const [filterFormat, setFilterFormat] = useState<string>('ALL');
   const [previewingPath, setPreviewingPath] = useState<string | null>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (folderInputRef.current) {
+      folderInputRef.current.setAttribute('webkitdirectory', '');
+      folderInputRef.current.setAttribute('directory', '');
+    }
+  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -35,6 +44,14 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       onFileUpload(e.dataTransfer.files);
+    }
+  };
+
+  const triggerFolderPicker = () => {
+    if (folderInputRef.current) {
+      folderInputRef.current.click();
+    } else {
+      onScanDownloadsFolder();
     }
   };
 
@@ -79,13 +96,23 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
             </div>
           </div>
 
+          {/* Hidden inputs for Folder and File selection */}
+          <input
+            ref={folderInputRef}
+            type="file"
+            multiple
+            accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
+            onChange={(e) => e.target.files && onFileUpload(e.target.files)}
+            className="hidden"
+          />
+
           <button
-            onClick={onScanDownloadsFolder}
+            onClick={triggerFolderPicker}
             disabled={isScanning}
             className="px-3.5 py-2 bg-gradient-to-r from-[#7C4DFF] to-[#00E5FF] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-purple-500/20 transition-all disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-            <span>{isScanning ? 'Сканирование...' : 'Сканировать'}</span>
+            <FolderSearch className="w-4 h-4 text-white" />
+            <span>Выбрать папку</span>
           </button>
         </div>
 
@@ -98,8 +125,9 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
             className="flex items-center justify-center gap-2 p-2.5 bg-[#0A0A0A] hover:bg-[#1A1A1A] border border-dashed border-[#222222] hover:border-[#7C4DFF]/60 rounded-xl cursor-pointer transition-colors text-xs text-[#E0E0E0] group"
           >
             <UploadCloud className="w-4 h-4 text-[#00E5FF] group-hover:scale-110 transition-transform" />
-            <span className="truncate">Загрузить файлы с устройства</span>
+            <span className="truncate">Выбрать аудиофайлы</span>
             <input
+              ref={fileInputRef}
               type="file"
               multiple
               accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
