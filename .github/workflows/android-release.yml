@@ -26,10 +26,13 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Build Web App & Sync Capacitor
+      - name: Build Web App & Add/Sync Capacitor Android
         run: |
           npm run build
-          npx cap sync android || true
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
 
       - name: Prepare Native Android Service & MediaSession
         run: python3 scripts/prepare_android.py
