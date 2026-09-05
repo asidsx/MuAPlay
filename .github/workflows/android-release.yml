@@ -45,9 +45,33 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      - name: Upload Release Artifact
+      - name: Sign Release APK
+        run: |
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
+          echo "Using Android Build Tools from: $BUILD_TOOLS_DIR"
+          
+          # 1. Генерация ключа подписи
+          keytool -genkey -v -keystore release.keystore \
+            -alias muaplay_alias -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass muaplaysimplepass -keypass muaplaysimplepass \
+            -dname "CN=MuAPlay, OU=App, O=MuAPlay, L=City, S=State, C=US"
+          
+          # 2. Выравнивание (zipalign)
+          $BUILD_TOOLS_DIR/zipalign -v -p 4 \
+            android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            android/app/build/outputs/apk/release/app-release-aligned.apk
+          
+          # 3. Подпись APK через apksigner
+          $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore \
+            --ks-key-alias muaplay_alias \
+            --ks-pass pass:muaplaysimplepass \
+            --key-pass pass:muaplaysimplepass \
+            --out android/app/build/outputs/apk/release/MuAPlay-v1.0-release.apk \
+            android/app/build/outputs/apk/release/app-release-aligned.apk
+
+      - name: Upload Signed APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          files: android/app/build/outputs/apk/release/MuAPlay-v1.0-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
