@@ -124,9 +124,7 @@ public class AudioForegroundService extends Service {
             '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
             '<uses-permission android:name="android.permission.WAKE_LOCK" />',
             '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />',
-            '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />',
-            '<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />',
-            '<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />'
+            '<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />'
         ]
 
         # Insert permissions safely before <application>
@@ -134,9 +132,6 @@ public class AudioForegroundService extends Service {
         if permissions_to_add and '<application' in m_content:
             perm_block = "\n    " + "\n    ".join(permissions_to_add) + "\n"
             m_content = m_content.replace('<application', f'{perm_block}\n    <application', 1)
-
-        if 'android:requestLegacyExternalStorage' not in m_content and '<application' in m_content:
-            m_content = m_content.replace('<application', '<application android:requestLegacyExternalStorage="true"', 1)
 
         if 'AudioForegroundService' not in m_content and '</application>' in m_content:
             service_decl = '    <service android:name="com.muaplay.app.AudioForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />\n</application>'
