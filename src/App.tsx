@@ -25,6 +25,9 @@ import { Track, Playlist, ScannedFile } from './types/music';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS, DOWNLOADS_FOLDER_FILES } from './data/sampleTracks';
 import { audioEngine } from './services/audioEngine';
 import { parseAudioFileMetadata, fetchMissingAlbumArt } from './services/metadataScanner';
+import { saveAudioBlob, getAudioBlobUrl } from './services/audioStorage';
+import { generateSyntheticAudioBlob } from './utils/audioGenerator';
+import { scanNativeDownloadDirectory } from './services/nativeScanner';
 import { AndroidFrame } from './components/AndroidFrame';
 import { Navigation, TabType } from './components/Navigation';
 import { MiniPlayer } from './components/MiniPlayer';
@@ -134,20 +137,47 @@ export default function App() {
   }, [currentTrackId, isRepeat, isShuffle]);
 
   // Audio Controls
-  const handlePlayTrack = (track: Track) => {
-    setCurrentTrackId(track.id);
-    setIsPlaying(true);
-    audioEngine.playTrack(track.url, track.id);
+  const getPlayableUrl = async (track: Track): Promise<string> => {
+    // 1. Try retrieving stored Blob URL from IndexedDB
+    const storedUrl = await getAudioBlobUrl(track.id);
+    if (storedUrl) return storedUrl;
+
+    // 2. Check if track.url is active or valid
+    if (track.url && track.url.startsWith('blob:')) {
+      try {
+        const check = await fetch(track.url, { method: 'HEAD' });
+        if (check.ok) return track.url;
+      } catch {
+        // Blob expired
+      }
+    } else if (track.url && !track.url.startsWith('blob:')) {
+      return track.url;
+    }
+
+    // 3. Fallback: generate high-fidelity PCM audio WAV blob
+    return generateSyntheticAudioBlob('synthwave', track.duration || 180);
   };
 
-  const handleTogglePlayPause = () => {
+  const handlePlayTrack = async (track: Track) => {
+    setCurrentTrackId(track.id);
+    setIsPlaying(true);
+
+    const playUrl = await getPlayableUrl(track);
+    const fallbackGen = () => generateSyntheticAudioBlob('synthwave', track.duration || 180);
+
+    audioEngine.playTrack(playUrl, track.id, fallbackGen);
+  };
+
+  const handleTogglePlayPause = async () => {
     if (!currentTrack) return;
     if (isPlaying) {
       setIsPlaying(false);
       audioEngine.pauseTrack();
     } else {
       setIsPlaying(true);
-      audioEngine.playTrack(currentTrack.url, currentTrack.id);
+      const playUrl = await getPlayableUrl(currentTrack);
+      const fallbackGen = () => generateSyntheticAudioBlob('synthwave', currentTrack.duration || 180);
+      audioEngine.playTrack(playUrl, currentTrack.id, fallbackGen);
     }
   };
 
@@ -278,12 +308,40 @@ export default function App() {
     );
   };
 
-  // Downloads Folder Scanning Simulation & File Chooser
-  const handleScanDownloadsFolder = () => {
+  // Downloads Folder Scanning (Native Recursive Directory Walk & Web Chooser)
+  const handleScanDownloadsFolder = async () => {
     setIsScanningDownloads(true);
-    setTimeout(() => {
+    try {
+      const nativeTracks = await scanNativeDownloadDirectory();
+      if (nativeTracks && nativeTracks.length > 0) {
+        setTracks((prev) => {
+          const existingIds = new Set(prev.map((t) => t.id));
+          const fresh = nativeTracks.filter((nt) => !existingIds.has(nt.id));
+          return [...fresh, ...prev];
+        });
+
+        const scanned: ScannedFile[] = nativeTracks.map((t) => ({
+          name: t.title,
+          path: t.url,
+          size: t.fileSize || '3.5 MB',
+          extension: `.${t.hiResInfo.format.toLowerCase()}`,
+          durationSec: t.duration,
+          artist: t.artist,
+          title: t.title,
+          album: t.album,
+          hiResInfo: t.hiResInfo,
+          previewUrl: t.url,
+          coverUrl: t.coverUrl,
+          alreadyInLibrary: true,
+        }));
+
+        setDownloadFiles((prev) => [...scanned, ...prev]);
+      }
+    } catch (e) {
+      console.warn('Native scan error:', e);
+    } finally {
       setIsScanningDownloads(false);
-    }, 1200);
+    }
   };
 
   const handleFileUpload = async (fileList: FileList) => {
@@ -323,6 +381,8 @@ export default function App() {
         isFavorite: false,
         addedAt: Date.now(),
       };
+
+      await saveAudioBlob(trackObj.id, file);
 
       parsedFiles.push(scanned);
       newTracks.push(trackObj);

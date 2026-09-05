@@ -30,10 +30,7 @@ class AudioEngine {
     if (this.isInitialized) return;
 
     this.audioElement = new Audio();
-    this.audioElement.crossOrigin = 'anonymous';
-
     this.previewAudioElement = new Audio();
-    this.previewAudioElement.crossOrigin = 'anonymous';
 
     this.isInitialized = true;
   }
@@ -45,52 +42,65 @@ class AudioEngine {
       this.ctx = new AudioCtx();
 
       if (this.audioElement) {
-        this.sourceNode = this.ctx.createMediaElementSource(this.audioElement);
-        this.gainNode = this.ctx.createGain();
-        this.analyserNode = this.ctx.createAnalyser();
-        this.analyserNode.fftSize = 256;
+        try {
+          this.sourceNode = this.ctx.createMediaElementSource(this.audioElement);
+          this.gainNode = this.ctx.createGain();
+          this.analyserNode = this.ctx.createAnalyser();
+          this.analyserNode.fftSize = 256;
 
-        // Build 10-Band Graphic Equalizer
-        this.eqFilters = EQ_FREQUENCIES.map((freq) => {
-          const filter = this.ctx!.createBiquadFilter();
-          filter.type = freq <= 63 ? 'lowshelf' : freq >= 8000 ? 'highshelf' : 'peaking';
-          filter.frequency.value = freq;
-          filter.Q.value = 1.4;
-          filter.gain.value = 0;
-          return filter;
-        });
+          // Build 10-Band Graphic Equalizer
+          this.eqFilters = EQ_FREQUENCIES.map((freq) => {
+            const filter = this.ctx!.createBiquadFilter();
+            filter.type = freq <= 63 ? 'lowshelf' : freq >= 8000 ? 'highshelf' : 'peaking';
+            filter.frequency.value = freq;
+            filter.Q.value = 1.4;
+            filter.gain.value = 0;
+            return filter;
+          });
 
-        // Connect chain: Source -> EQ Filter 0 -> ... -> EQ Filter N -> Gain -> Analyser -> Destination
-        let currentNode: AudioNode = this.sourceNode;
-        this.eqFilters.forEach((filter) => {
-          currentNode.connect(filter);
-          currentNode = filter;
-        });
+          // Connect chain: Source -> EQ Filter 0 -> ... -> EQ Filter N -> Gain -> Analyser -> Destination
+          let currentNode: AudioNode = this.sourceNode;
+          this.eqFilters.forEach((filter) => {
+            currentNode.connect(filter);
+            currentNode = filter;
+          });
 
-        currentNode.connect(this.gainNode);
-        this.gainNode.connect(this.analyserNode);
-        this.analyserNode.connect(this.ctx.destination);
+          currentNode.connect(this.gainNode);
+          this.gainNode.connect(this.analyserNode);
+          this.analyserNode.connect(this.ctx.destination);
+        } catch (err) {
+          console.warn('Web Audio source creation failed, using standard HTML5 Audio:', err);
+        }
       }
     }
 
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
     }
   }
 
-  public playTrack(url: string, trackId: string) {
+  public async playTrack(url: string, trackId: string, fallbackGenerator?: () => string) {
     this.ensureAudioContext();
     if (!this.audioElement) return;
 
     // Stop preview if running
     this.stopPreview();
 
-    if (this.currentTrackId !== trackId) {
+    if (this.currentTrackId !== trackId || !this.audioElement.src || this.audioElement.src !== url) {
       this.currentTrackId = trackId;
       this.audioElement.src = url;
     }
 
-    this.audioElement.play().catch((err) => console.warn('Audio play error:', err));
+    try {
+      await this.audioElement.play();
+    } catch (err) {
+      console.warn('Primary audio playback error, attempting fallback:', err);
+      if (fallbackGenerator) {
+        const fallbackUrl = fallbackGenerator();
+        this.audioElement.src = fallbackUrl;
+        this.audioElement.play().catch((e) => console.error('Fallback playback error:', e));
+      }
+    }
   }
 
   public pauseTrack() {

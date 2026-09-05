@@ -141,10 +141,6 @@ export const AndroidFrame: React.FC<AndroidFrameProps> = ({
               </span>
             )}
             <Wifi className={`w-3.5 h-3.5 ${isCyber ? 'text-[#FF1A3C]' : 'text-[#888888]'}`} />
-            <div className="flex items-center gap-0.5">
-              <span className="text-[10px] font-mono">98%</span>
-              <Battery className={`w-4 h-4 fill-current ${isCyber ? 'text-[#FF1A3C]' : 'text-[#00E5FF]'}`} />
-            </div>
           </div>
         </div>
 
