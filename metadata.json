@@ -1,0 +1,6 @@
+{
+  "name": "MuAPlay",
+  "description": "MuAPlay - Modern Android music player with high-res audio support, playlists, folder scanner, auto album artwork, equalizer and Cyberpunk 2077 HUD mode.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
