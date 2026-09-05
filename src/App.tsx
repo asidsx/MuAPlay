@@ -25,9 +25,9 @@ import { Track, Playlist, ScannedFile } from './types/music';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS, DOWNLOADS_FOLDER_FILES } from './data/sampleTracks';
 import { audioEngine } from './services/audioEngine';
 import { parseAudioFileMetadata, fetchMissingAlbumArt } from './services/metadataScanner';
-import { saveAudioBlob, getAudioBlobUrl } from './services/audioStorage';
+import { saveAudioBlob, getAudioBlobUrl, deleteAudioBlob } from './services/audioStorage';
 import { generateSyntheticAudioBlob } from './utils/audioGenerator';
-import { scanNativeDownloadDirectory } from './services/nativeScanner';
+import { scanNativeDownloadDirectory, loadNativeFileAsBlob } from './services/nativeScanner';
 import { AndroidFrame } from './components/AndroidFrame';
 import { Navigation, TabType } from './components/Navigation';
 import { MiniPlayer } from './components/MiniPlayer';
@@ -35,24 +35,10 @@ import { NowPlayingModal } from './components/NowPlayingModal';
 import { PlaylistView } from './components/PlaylistView';
 import { DownloadsScanner } from './components/DownloadsScanner';
 import { EqualizerView } from './components/EqualizerView';
-import { CyberpunkHudView } from './components/CyberpunkHudView';
 
 export default function App() {
-  // Navigation & Visual Theme State
+  // Navigation State
   const [activeTab, setActiveTab] = useState<TabType>('tracks');
-  const [guiMode, setGuiMode] = useState<'standard' | 'cyberpunk'>('standard');
-
-  const toggleGuiMode = () => {
-    setGuiMode((prev) => {
-      const next = prev === 'standard' ? 'cyberpunk' : 'standard';
-      if (next === 'cyberpunk') {
-        setActiveTab('cyberpunk');
-      } else if (activeTab === 'cyberpunk') {
-        setActiveTab('tracks');
-      }
-      return next;
-    });
-  };
 
   // Media Data State (starts 100% clean without demo tracks)
   const [tracks, setTracks] = useState<Track[]>(() => {
@@ -137,12 +123,22 @@ export default function App() {
   }, [currentTrackId, isRepeat, isShuffle]);
 
   // Audio Controls
-  const getPlayableUrl = async (track: Track): Promise<string> => {
+  const getPlayableUrl = async (track: Track): Promise<string | null> => {
     // 1. Try retrieving stored Blob URL from IndexedDB
     const storedUrl = await getAudioBlobUrl(track.id);
     if (storedUrl) return storedUrl;
 
-    // 2. Check if track.url is active or valid
+    // 2. Try loading native Android file if present
+    if (track.filePath) {
+      const nativeBlob = await loadNativeFileAsBlob(track.filePath);
+      if (nativeBlob) {
+        await saveAudioBlob(track.id, nativeBlob);
+        const url = URL.createObjectURL(nativeBlob);
+        return url;
+      }
+    }
+
+    // 3. Check if track.url is active or valid
     if (track.url && track.url.startsWith('blob:')) {
       try {
         const check = await fetch(track.url, { method: 'HEAD' });
@@ -150,22 +146,59 @@ export default function App() {
       } catch {
         // Blob expired
       }
-    } else if (track.url && !track.url.startsWith('blob:')) {
+    } else if (track.url && (track.url.startsWith('http://') || track.url.startsWith('https://'))) {
       return track.url;
     }
 
-    // 3. Fallback: generate high-fidelity PCM audio WAV blob
-    return generateSyntheticAudioBlob('synthwave', track.duration || 180);
+    // Return null if file is unreachable or broken
+    return null;
   };
 
   const handlePlayTrack = async (track: Track) => {
     setCurrentTrackId(track.id);
-    setIsPlaying(true);
 
     const playUrl = await getPlayableUrl(track);
-    const fallbackGen = () => generateSyntheticAudioBlob('synthwave', track.duration || 180);
+    if (!playUrl) {
+      setIsPlaying(false);
+      alert(`Аудиофайл «${track.title}» недоступен или ссылку невозможно открыть. Вы можете удалить его из медиатеки.`);
+      return;
+    }
 
-    audioEngine.playTrack(playUrl, track.id, fallbackGen);
+    setIsPlaying(true);
+    audioEngine.playTrack(playUrl, track.id);
+  };
+
+  const handleDeleteTrack = async (trackId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    await deleteAudioBlob(trackId);
+
+    setTracks((prev) => prev.filter((t) => t.id !== trackId));
+    setPlaylists((prev) =>
+      prev.map((pl) => ({
+        ...pl,
+        trackIds: pl.trackIds.filter((id) => id !== trackId),
+      }))
+    );
+
+    if (currentTrackId === trackId) {
+      audioEngine.pauseTrack();
+      setIsPlaying(false);
+      setCurrentTrackId(null);
+    }
+  };
+
+  const handleClearAllTracks = async () => {
+    if (window.confirm('Очистить весь список и удалить все треки из медиатеки?')) {
+      for (const t of tracks) {
+        await deleteAudioBlob(t.id);
+      }
+      setTracks([]);
+      setPlaylists((prev) => prev.map((pl) => ({ ...pl, trackIds: [] })));
+      audioEngine.pauseTrack();
+      setIsPlaying(false);
+      setCurrentTrackId(null);
+    }
   };
 
   const handleTogglePlayPause = async () => {
@@ -456,119 +489,101 @@ export default function App() {
     <AndroidFrame
       activeTrackFormat={currentTrack ? `${currentTrack.hiResInfo.format}` : undefined}
       isLossless={currentTrack?.hiResInfo.isLossless}
-      guiMode={guiMode}
-      onToggleGuiMode={toggleGuiMode}
     >
-      {/* App Header */}
-      <header className={`px-4 py-2.5 backdrop-blur-md border-b flex items-center justify-between z-10 shrink-0 ${
-        guiMode === 'cyberpunk'
-          ? 'bg-[#120408]/90 border-[#FF1A3C]/60 text-[#FF1A3C]'
-          : 'bg-[#0A0A0A]/90 border-[#1F1F1F]'
-      }`}>
+      {/* App Cyberpunk Header */}
+      <header className="px-4 py-2.5 backdrop-blur-md border-b flex items-center justify-between z-10 shrink-0 bg-[#120308]/95 border-[#FF1A3C]/50 text-[#FF1A3C]">
         <div className="flex items-center gap-2.5">
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-lg ${
-            guiMode === 'cyberpunk'
-              ? 'bg-[#FF1A3C] text-black shadow-[0_0_12px_#FF1A3C]'
-              : 'bg-gradient-to-tr from-[#7C4DFF] to-[#00E5FF] text-white shadow-purple-500/20'
-          }`}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#FF1A3C] text-black shadow-[0_0_12px_#FF1A3C]">
             <Music className="w-4 h-4 stroke-[2.5]" />
           </div>
           <div>
-            <h1 className="text-sm font-black tracking-tight leading-none text-[#FFFFFF]">
-              {guiMode === 'cyberpunk' ? 'NETRUNNER HI-RES DAC' : 'MuAPlay'}
+            <h1 className="text-xs font-black tracking-wider leading-none text-[#FFFFFF] font-mono">
+              MUAPLAY // CYBER_AUDIO 2077
             </h1>
-            <p className={`text-[10px] font-mono mt-0.5 font-bold ${
-              guiMode === 'cyberpunk' ? 'text-[#FF1A3C]' : 'text-[#00E5FF]'
-            }`}>
-              {guiMode === 'cyberpunk' ? 'SYS.VER 55.0011214 • LOSSLESS' : 'FLAC 24-Bit / 192 kHz Player'}
+            <p className="text-[9px] font-mono mt-0.5 font-bold text-[#00E5FF]">
+              [ NEURAL_DAC // 192 kHz LOSSLESS ]
             </p>
           </div>
         </div>
 
-        {/* Global Search button toggle */}
+        {/* Global Search input */}
         <div className="relative">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Поиск..."
-            className={`w-28 sm:w-36 rounded-xl pl-7 pr-2 py-1 text-xs text-[#E0E0E0] placeholder-[#555555] focus:outline-none ${
-              guiMode === 'cyberpunk'
-                ? 'bg-[#18050B] border border-[#FF1A3C]/50 focus:border-[#FF1A3C] text-[#FF8095]'
-                : 'bg-[#121212] border border-[#1F1F1F] focus:border-[#7C4DFF]/80'
-            }`}
+            placeholder="ПОИСК..."
+            className="w-28 sm:w-36 rounded-lg pl-7 pr-2 py-1 text-[11px] font-mono bg-[#18040C] border border-[#FF1A3C]/40 focus:border-[#FF1A3C] text-[#FF8095] placeholder-[#661828] focus:outline-none"
           />
-          <Search className={`w-3.5 h-3.5 absolute left-2.5 top-2 ${
-            guiMode === 'cyberpunk' ? 'text-[#FF1A3C]' : 'text-[#777777]'
-          }`} />
+          <Search className="w-3.5 h-3.5 absolute left-2 top-1.5 text-[#FF1A3C]" />
         </div>
       </header>
 
       {/* Main Screen Content Router based on Active Tab */}
       <main className="flex-1 overflow-hidden flex flex-col relative">
-        {/* Tab 0: Cyberpunk HUD Mode */}
-        {activeTab === 'cyberpunk' && (
-          <CyberpunkHudView
-            tracks={tracks}
-            currentTrack={currentTrack}
-            isPlaying={isPlaying}
-            currentTime={currentTime}
-            duration={duration}
-            onPlayTrack={handlePlayTrack}
-            onPlayPause={handleTogglePlayPause}
-            onToggleFavorite={handleToggleFavorite}
-          />
-        )}
         {/* Tab 1: All Tracks (Треки) */}
         {activeTab === 'tracks' && (
-          <div className="flex-1 flex flex-col overflow-hidden p-3 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-[#1F1F1F] shrink-0">
+          <div className="flex-1 flex flex-col overflow-hidden p-3 space-y-3 font-mono">
+            <div className="flex items-center justify-between pb-2 border-b border-[#FF1A3C]/30 shrink-0">
               <div>
-                <h2 className="text-sm font-black text-[#FFFFFF] flex items-center gap-2">
-                  <Music className="w-4 h-4 text-[#7C4DFF]" />
-                  <span>Медиатека аудиофайлов</span>
+                <h2 className="text-xs font-black text-[#FFFFFF] flex items-center gap-1.5 tracking-wider">
+                  <Music className="w-4 h-4 text-[#FF1A3C]" />
+                  <span>МЕДИАТЕКА АУДИОФАЙЛОВ</span>
                 </h2>
-                <p className="text-[10px] text-[#777777] font-mono">
-                  Всего файлов: {filteredTracks.length}
+                <p className="text-[9px] text-[#883344]">
+                  ВСЕГО ФАЙЛОВ: {filteredTracks.length}
                 </p>
               </div>
 
-              <button
-                onClick={handleAutoFetchAllCovers}
-                disabled={isFetchingCovers}
-                className="px-2.5 py-1 bg-[#7C4DFF]/15 hover:bg-[#7C4DFF]/25 text-[#00E5FF] border border-[#7C4DFF]/30 rounded-xl text-[11px] font-semibold flex items-center gap-1 transition-colors"
-              >
-                <Sparkles className="w-3 h-3 text-[#00E5FF]" />
-                <span>Загрузить обложки</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                {tracks.length > 0 && (
+                  <button
+                    onClick={handleClearAllTracks}
+                    title="Очистить всю медиатеку"
+                    className="px-2 py-1 bg-[#18040C] hover:bg-[#250412] text-[#FF1A3C] border border-[#FF1A3C]/40 rounded-lg text-[10px] font-black flex items-center gap-1 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>ОЧИСТИТЬ</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleAutoFetchAllCovers}
+                  disabled={isFetchingCovers}
+                  className="px-2 py-1 bg-[#18040C] hover:bg-[#250412] text-[#00E5FF] border border-[#00E5FF]/40 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors"
+                >
+                  <Sparkles className="w-3 h-3 text-[#00E5FF]" />
+                  <span>ОБЛОЖКИ</span>
+                </button>
+              </div>
             </div>
 
             {/* Track List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {filteredTracks.length === 0 ? (
-                <div className="py-16 px-4 text-center space-y-4 my-auto">
-                  <div className="w-16 h-16 mx-auto rounded-3xl bg-[#121212] border border-[#1F1F1F] flex items-center justify-center text-[#7C4DFF] shadow-inner">
-                    <Music className="w-8 h-8 text-[#7C4DFF]" />
+                <div className="py-16 px-4 text-center space-y-3 my-auto border border-dashed border-[#FF1A3C]/30 rounded-xl bg-[#100308]/40">
+                  <div className="w-12 h-12 mx-auto rounded-xl bg-[#18040C] border border-[#FF1A3C]/50 flex items-center justify-center text-[#FF1A3C] shadow-[0_0_10px_rgba(255,26,60,0.3)]">
+                    <Music className="w-6 h-6 text-[#FF1A3C]" />
                   </div>
                   <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-[#E0E0E0]">Медиатека пуста</h3>
-                    <p className="text-xs text-[#777777] max-w-xs mx-auto">
-                      Загрузите файлы с устройства или просканируйте папку Загрузки для автоматического добавления аудиозаписей.
+                    <h3 className="text-xs font-bold text-[#FFFFFF]">[ МЕДИАТЕКА ПУСТА ]</h3>
+                    <p className="text-[10px] text-[#883344] max-w-xs mx-auto">
+                      Загрузите аудиофайлы с устройства или запустите сканирование папки Загрузки.
                     </p>
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
                     <button
                       onClick={() => setActiveTab('downloads')}
-                      className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-[#7C4DFF] to-[#00E5FF] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
+                      className="w-full sm:w-auto px-3.5 py-1.5 bg-[#FF1A3C] hover:bg-[#FF0033] text-black font-black text-[10px] rounded-lg flex items-center justify-center gap-1.5 shadow-[0_0_10px_rgba(255,26,60,0.6)]"
                     >
-                      <FolderDown className="w-4 h-4" />
-                      <span>Открыть Загрузки</span>
+                      <FolderDown className="w-3.5 h-3.5" />
+                      <span>ОТКРЫТЬ ЗАГРУЗКИ</span>
                     </button>
 
-                    <label className="w-full sm:w-auto px-4 py-2 bg-[#121212] hover:bg-[#1A1A1A] border border-[#222222] text-[#E0E0E0] font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors">
-                      <Plus className="w-4 h-4 text-[#00E5FF]" />
-                      <span>Выбрать файлы</span>
+                    <label className="w-full sm:w-auto px-3.5 py-1.5 bg-[#18040C] hover:bg-[#250412] border border-[#00E5FF]/40 text-[#00E5FF] font-bold text-[10px] rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-colors">
+                      <Plus className="w-3.5 h-3.5 text-[#00E5FF]" />
+                      <span>ВЫБРАТЬ ФАЙЛЫ</span>
                       <input
                         type="file"
                         multiple
@@ -581,84 +596,90 @@ export default function App() {
                 </div>
               ) : (
                 filteredTracks.map((track) => {
-                const isCurrent = currentTrackId === track.id;
+                  const isCurrent = currentTrackId === track.id;
 
-                return (
-                  <div
-                    key={track.id}
-                    onClick={() => handlePlayTrack(track)}
-                    className={`group relative flex items-center justify-between p-2.5 rounded-2xl transition-all cursor-pointer ${
-                      isCurrent
-                        ? 'bg-[#1A1A1A] border border-[#7C4DFF]/50 shadow-md shadow-purple-500/10'
-                        : 'bg-[#121212] hover:bg-[#161616] border border-[#1F1F1F]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-[#0A0A0A] shrink-0 border border-[#1F1F1F]">
-                        <img
-                          src={track.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
-                          alt={track.title}
-                          className="w-full h-full object-cover"
-                        />
-                        <div
-                          className={`absolute inset-0 flex items-center justify-center transition-opacity ${
-                            isCurrent
-                              ? 'bg-[#0A0A0A]/60 opacity-100'
-                              : 'bg-[#0A0A0A]/40 opacity-0 group-hover:opacity-100'
-                          }`}
+                  return (
+                    <div
+                      key={track.id}
+                      onClick={() => handlePlayTrack(track)}
+                      className={`group relative flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border ${
+                        isCurrent
+                          ? 'bg-[#1C040E] border-[#FF1A3C] shadow-[0_0_12px_rgba(255,26,60,0.35)]'
+                          : 'bg-[#120308] hover:bg-[#18040D] border-[#FF1A3C]/35'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/40">
+                          <img
+                            src={track.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
+                            alt={track.title}
+                            className="w-full h-full object-cover"
+                          />
+                          <div
+                            className={`absolute inset-0 flex items-center justify-center transition-opacity ${
+                              isCurrent
+                                ? 'bg-[#080104]/60 opacity-100'
+                                : 'bg-[#080104]/40 opacity-0 group-hover:opacity-100'
+                            }`}
+                          >
+                            <Play
+                              className={`w-3.5 h-3.5 ${
+                                isCurrent && isPlaying
+                                  ? 'text-[#FF1A3C] animate-pulse fill-[#FF1A3C]'
+                                  : 'text-white fill-white'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <h4 className={`text-xs font-bold truncate ${
+                            isCurrent ? 'text-[#00E5FF] font-black' : 'text-[#FFFFFF]'
+                          }`}>
+                            {track.title}
+                          </h4>
+                          <div className="flex items-center gap-1.5 mt-0.5 text-[9px] text-[#883344]">
+                            <span className="truncate">{track.artist}</span>
+                            <span>•</span>
+                            <span className="px-1 py-0.2 rounded font-bold text-[8px] bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40">
+                              {track.hiResInfo.format}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavorite(track.id);
+                          }}
+                          className="p-1 text-[#882233] hover:text-[#FF1A3C] rounded transition-colors"
+                          title="В избранное"
                         >
-                          <Play
+                          <Heart
                             className={`w-4 h-4 ${
-                              isCurrent && isPlaying
-                                ? 'text-[#00E5FF] animate-pulse fill-[#00E5FF]'
-                                : 'text-white fill-white'
+                              track.isFavorite ? 'fill-[#FF1A3C] text-[#FF1A3C]' : ''
                             }`}
                           />
-                        </div>
-                      </div>
+                        </button>
 
-                      <div className="min-w-0 flex-1">
-                        <h4 className={`text-xs font-bold truncate ${
-                          isCurrent ? 'text-[#00E5FF]' : 'text-[#E0E0E0]'
-                        }`}>
-                          {track.title}
-                        </h4>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-[#777777]">
-                          <span className="truncate">{track.artist}</span>
-                          <span>•</span>
-                          <span className={`px-1.5 py-0.2 rounded font-mono font-bold text-[9px] ${
-                            track.hiResInfo.isLossless
-                              ? 'bg-[#00E5FF]/10 text-[#00E5FF] border border-[#00E5FF]/20'
-                              : 'bg-[#1F1F1F] text-[#888888]'
-                          }`}>
-                            {track.hiResInfo.format} {track.hiResInfo.bitDepth ? `${track.hiResInfo.bitDepth}B` : ''}
-                          </span>
-                        </div>
+                        <span className="text-[9px] font-mono text-[#883344] px-1">
+                          {formatDuration(track.duration)}
+                        </span>
+
+                        <button
+                          onClick={(e) => handleDeleteTrack(track.id, e)}
+                          className="p-1 text-[#882233] hover:text-[#FF1A3C] hover:bg-[#FF1A3C]/10 rounded transition-colors"
+                          title="Удалить трек из медиатеки"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleFavorite(track.id);
-                        }}
-                        className="p-1 text-[#777777] hover:text-rose-400"
-                      >
-                        <Heart
-                          className={`w-4 h-4 ${
-                            track.isFavorite ? 'fill-rose-500 text-rose-500' : ''
-                          }`}
-                        />
-                      </button>
-
-                      <span className="text-[10px] font-mono text-[#777777]">
-                        {formatDuration(track.duration)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              }))}
+                  );
+                })
+              )}
             </div>
           </div>
         )}
@@ -702,24 +723,24 @@ export default function App() {
 
         {/* Tab 5: Favorites (Избранное) */}
         {activeTab === 'favorites' && (
-          <div className="flex-1 flex flex-col overflow-hidden p-3 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-[#1F1F1F] shrink-0">
-              <h2 className="text-sm font-black text-[#FFFFFF] flex items-center gap-2">
-                <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
-                <span>Избранные Hi-Res треки</span>
+          <div className="flex-1 flex flex-col overflow-hidden p-3 space-y-3 font-mono">
+            <div className="flex items-center justify-between pb-2 border-b border-[#FF1A3C]/30 shrink-0">
+              <h2 className="text-xs font-black text-[#FFFFFF] flex items-center gap-1.5 tracking-wider">
+                <Heart className="w-4 h-4 text-[#FF1A3C] fill-[#FF1A3C]" />
+                <span>ИЗБРАННЫЕ АУДИОТРЕКИ</span>
               </h2>
-              <span className="text-[10px] font-mono text-[#777777]">
-                Всего: {favoriteTracks.length}
+              <span className="text-[9px] text-[#883344]">
+                ВСЕГО: {favoriteTracks.length}
               </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {favoriteTracks.length === 0 ? (
-                <div className="py-16 text-center text-[#555555] space-y-2">
-                  <Heart className="w-10 h-10 mx-auto text-[#222222]" />
-                  <p className="text-xs">В избранном пока нет треков</p>
-                  <p className="text-[10px] text-[#555555]">
-                    Нажмите сердечко возле трека, чтобы добавить его сюда
+                <div className="py-16 text-center text-[#883344] space-y-2 border border-dashed border-[#FF1A3C]/30 rounded-xl my-auto">
+                  <Heart className="w-8 h-8 mx-auto opacity-40 text-[#FF1A3C]" />
+                  <p className="text-xs">[ В ИЗБРАННОМ НЕТ ТРЕКОВ ]</p>
+                  <p className="text-[10px] text-[#883344]">
+                    Нажмите сердечко возле трека, чтобы закрепить его в этой вкладке.
                   </p>
                 </div>
               ) : (
@@ -727,24 +748,24 @@ export default function App() {
                   <div
                     key={track.id}
                     onClick={() => handlePlayTrack(track)}
-                    className="flex items-center justify-between p-2.5 bg-[#121212] hover:bg-[#161616] border border-[#1F1F1F] rounded-2xl cursor-pointer transition-colors"
+                    className="flex items-center justify-between p-2 bg-[#120308] hover:bg-[#18040D] border border-[#FF1A3C]/35 rounded-xl cursor-pointer transition-all"
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <img
                         src={track.coverUrl}
                         alt={track.title}
-                        className="w-10 h-10 rounded-xl object-cover shrink-0"
+                        className="w-10 h-10 rounded-lg object-cover shrink-0 border border-[#FF1A3C]/40"
                       />
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-xs font-bold text-[#E0E0E0] truncate">
+                        <h4 className="text-xs font-bold text-[#FFFFFF] truncate">
                           {track.title}
                         </h4>
-                        <p className="text-[10px] text-[#777777] truncate">{track.artist}</p>
+                        <p className="text-[9px] text-[#883344] truncate">{track.artist}</p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-[#00E5FF] font-bold bg-[#00E5FF]/10 px-1.5 py-0.5 rounded border border-[#00E5FF]/20">
+                      <span className="text-[8px] font-bold bg-[#FF1A3C]/20 text-[#FF1A3C] px-1 py-0.2 rounded border border-[#FF1A3C]/40">
                         {track.hiResInfo.format}
                       </span>
                       <button
@@ -752,9 +773,9 @@ export default function App() {
                           e.stopPropagation();
                           handleToggleFavorite(track.id);
                         }}
-                        className="p-1 text-rose-500"
+                        className="p-1 text-[#FF1A3C]"
                       >
-                        <Heart className="w-4 h-4 fill-rose-500" />
+                        <Heart className="w-4 h-4 fill-[#FF1A3C]" />
                       </button>
                     </div>
                   </div>
@@ -808,7 +829,6 @@ export default function App() {
         onTabChange={setActiveTab}
         tracksCount={tracks.length}
         playlistsCount={playlists.length}
-        guiMode={guiMode}
       />
     </AndroidFrame>
   );

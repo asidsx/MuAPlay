@@ -1,5 +1,16 @@
 import React, { useState, useRef } from 'react';
-import { FolderDown, RefreshCw, UploadCloud, Sparkles, Play, Square, CheckCircle2, Music, ShieldCheck, FileAudio, Disc, FolderSearch } from 'lucide-react';
+import {
+  FolderDown,
+  RefreshCw,
+  Sparkles,
+  Play,
+  Square,
+  CheckCircle2,
+  FileAudio,
+  Plus,
+  FolderSearch,
+  Terminal,
+} from 'lucide-react';
 import { ScannedFile, Track } from '../types/music';
 import { audioEngine } from '../services/audioEngine';
 
@@ -78,19 +89,19 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden p-3 space-y-3">
+    <div className="flex-1 flex flex-col h-full overflow-hidden p-3 space-y-3 font-mono">
       {/* Header & Path Banner */}
-      <div className="bg-[#121212] border border-[#1F1F1F] rounded-2xl p-3.5 space-y-3 shrink-0 shadow-lg">
+      <div className="bg-[#120308] border border-[#FF1A3C]/50 rounded-xl p-3 space-y-2.5 shrink-0 shadow-[0_0_15px_rgba(255,26,60,0.2)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-[#7C4DFF]/15 text-[#00E5FF] rounded-xl border border-[#7C4DFF]/30">
-              <FolderDown className="w-5 h-5 text-[#00E5FF]" />
+            <div className="p-1.5 bg-[#FF1A3C]/15 text-[#FF1A3C] rounded-lg border border-[#FF1A3C]/40">
+              <Terminal className="w-4 h-4 text-[#FF1A3C]" />
             </div>
             <div>
-              <h2 className="text-sm font-black text-[#FFFFFF] flex items-center gap-1.5">
-                Сканер папки Загрузки
+              <h2 className="text-xs font-black text-[#FFFFFF] tracking-wide">
+                TERMINAL // FILE_SCANNER
               </h2>
-              <p className="text-[10px] text-[#777777] font-mono">
+              <p className="text-[9px] text-[#00E5FF]">
                 /storage/emulated/0/Download/
               </p>
             </div>
@@ -101,90 +112,82 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
             ref={folderInputRef}
             type="file"
             multiple
+            onChange={(e) => e.target.files && onFileUpload(e.target.files)}
+            className="hidden"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
             accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
             onChange={(e) => e.target.files && onFileUpload(e.target.files)}
             className="hidden"
           />
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => {
-                onScanDownloadsFolder();
-                triggerFolderPicker();
-              }}
-              disabled={isScanning}
-              className="px-3.5 py-2 bg-gradient-to-r from-[#7C4DFF] to-[#00E5FF] text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-purple-500/20 transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'Сканирование...' : 'Сканировать'}</span>
-            </button>
-          </div>
+          <button
+            onClick={onScanDownloadsFolder}
+            disabled={isScanning}
+            className="px-2.5 py-1 bg-[#FF1A3C] hover:bg-[#FF0033] text-black rounded-lg font-black text-[10px] flex items-center gap-1 transition-all shadow-[0_0_10px_rgba(255,26,60,0.6)] disabled:opacity-50 active:scale-95"
+          >
+            <RefreshCw className={`w-3 h-3 ${isScanning ? 'animate-spin' : ''}`} />
+            <span>{isScanning ? 'СКАНИРУЮ...' : 'СКАНИРОВАТЬ'}</span>
+          </button>
         </div>
 
-        {/* Quick Actions: Dropzone & Auto Cover Art */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {/* File Drag/Drop or Select */}
-          <label
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            className="flex items-center justify-center gap-2 p-2.5 bg-[#0A0A0A] hover:bg-[#1A1A1A] border border-dashed border-[#222222] hover:border-[#7C4DFF]/60 rounded-xl cursor-pointer transition-colors text-xs text-[#E0E0E0] group"
-          >
-            <UploadCloud className="w-4 h-4 text-[#00E5FF] group-hover:scale-110 transition-transform" />
-            <span className="truncate">Выбрать аудиофайлы</span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
-              onChange={(e) => e.target.files && onFileUpload(e.target.files)}
-              className="hidden"
-            />
-          </label>
-
-          {/* Auto Cover Art Loader */}
+        {/* Cyber terminal action buttons */}
+        <div className="grid grid-cols-2 gap-2 pt-0.5">
           <button
-            onClick={onAutoFetchAllCovers}
-            disabled={isFetchingCovers}
-            className="flex items-center justify-center gap-2 p-2.5 bg-[#7C4DFF]/15 hover:bg-[#7C4DFF]/25 border border-[#7C4DFF]/30 rounded-xl text-xs font-semibold text-[#00E5FF] transition-colors disabled:opacity-50"
+            onClick={triggerFolderPicker}
+            className="py-1.5 px-2 bg-[#18040C] hover:bg-[#250614] border border-[#FF1A3C]/40 text-[#FF8095] rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors"
           >
-            <Sparkles className={`w-4 h-4 text-[#00E5FF] ${isFetchingCovers ? 'animate-spin' : ''}`} />
-            <span>{isFetchingCovers ? 'Загрузка обложек...' : 'Авто-обложки альбомов'}</span>
+            <FolderSearch className="w-3.5 h-3.5 text-[#FF1A3C]" />
+            <span>Указать папку</span>
+          </button>
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="py-1.5 px-2 bg-[#18040C] hover:bg-[#250614] border border-[#00E5FF]/40 text-[#00E5FF] rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5 text-[#00E5FF]" />
+            <span>Выбрать файлы</span>
           </button>
         </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex items-center justify-between gap-1 border-b border-[#1F1F1F] pb-2 shrink-0 overflow-x-auto">
-        <div className="flex items-center gap-1.5">
-          {['ALL', 'FLAC', 'WAV', 'MP3', 'M4A', 'OPUS'].map((fmt) => (
-            <button
-              key={fmt}
-              onClick={() => setFilterFormat(fmt)}
-              className={`px-2.5 py-1 rounded-xl text-[11px] font-mono font-bold transition-all ${
-                filterFormat === fmt
-                  ? 'bg-[#7C4DFF] text-white shadow-sm'
-                  : 'bg-[#121212] text-[#777777] hover:text-[#E0E0E0] border border-[#1F1F1F]'
-              }`}
-            >
-              {fmt === 'ALL' ? 'Все файлы' : fmt}
-            </button>
-          ))}
-        </div>
-
-        <span className="text-[10px] text-[#777777] font-mono shrink-0">
-          Найдено: {filteredFiles.length}
-        </span>
+      {/* Format Filter Badges */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 scrollbar-none">
+        {['ALL', 'FLAC', 'WAV', 'MP3', 'M4A', 'OGG'].map((fmt) => (
+          <button
+            key={fmt}
+            onClick={() => setFilterFormat(fmt)}
+            className={`px-2.5 py-0.5 rounded-md text-[9px] font-bold transition-all border ${
+              filterFormat === fmt
+                ? 'bg-[#FF1A3C] text-black border-[#FF1A3C] shadow-[0_0_8px_#FF1A3C]'
+                : 'bg-[#120308] text-[#883344] border-[#FF1A3C]/30 hover:text-[#FF8095]'
+            }`}
+          >
+            [ {fmt} ]
+          </button>
+        ))}
       </div>
 
-      {/* Scanned Audio Files List */}
-      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+      {/* Scanned Files List / Terminal View */}
+      <div
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className="flex-1 overflow-y-auto space-y-2 pr-1"
+      >
         {filteredFiles.length === 0 ? (
-          <div className="py-12 text-center text-[#555555] space-y-2">
-            <FileAudio className="w-10 h-10 mx-auto text-[#222222] opacity-80" />
-            <p className="text-sm font-medium text-[#777777]">Файлы не найдены</p>
-            <p className="text-xs text-[#555555]">
-              Нажмите «Сканировать» для проверки папки Загрузки
-            </p>
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 bg-[#100308]/40 border border-dashed border-[#FF1A3C]/30 rounded-xl">
+            <FolderDown className="w-10 h-10 text-[#FF1A3C]/50 mx-auto" />
+            <div>
+              <h3 className="text-xs font-bold text-[#FFFFFF]">
+                [ АУДИОФАЙЛЫ НЕ ОБНАРУЖЕНЫ ]
+              </h3>
+              <p className="text-[10px] text-[#883344] mt-1 max-w-xs">
+                Нажмите «Сканировать» для проверки папки Download или перетащите аудиофайлы сюда.
+              </p>
+            </div>
           </div>
         ) : (
           filteredFiles.map((file) => {
@@ -193,73 +196,65 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
 
             return (
               <div
-                key={file.path}
-                className="group bg-[#121212] hover:bg-[#161616] border border-[#1F1F1F] rounded-2xl p-2.5 flex items-center justify-between gap-3 transition-all"
+                key={file.id}
+                className="bg-[#120308] border border-[#FF1A3C]/35 hover:border-[#FF1A3C]/70 rounded-xl p-2.5 flex items-center justify-between gap-2.5 transition-all shadow-sm"
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  {/* Play preview button */}
-                  <button
-                    onClick={(e) => handlePreview(e, file)}
-                    title={isPreviewing ? 'Остановить' : 'Прослушать перед добавлением'}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
-                      isPreviewing
-                        ? 'bg-[#7C4DFF] text-white shadow-md shadow-purple-500/30 animate-pulse'
-                        : 'bg-[#0A0A0A] hover:bg-[#7C4DFF]/20 text-[#00E5FF] border border-[#7C4DFF]/30'
-                    }`}
-                  >
-                    {isPreviewing ? (
-                      <Square className="w-4 h-4 fill-white" />
-                    ) : (
-                      <Play className="w-4 h-4 fill-[#00E5FF] ml-0.5" />
-                    )}
-                  </button>
-
-                  {/* Album Cover Thumbnail */}
-                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-[#0A0A0A] shrink-0 border border-[#1F1F1F]">
-                    <img
-                      src={file.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
-                      alt={file.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Metadata */}
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-xs font-bold text-[#E0E0E0] truncate">
-                      {file.title || file.name}
-                    </h4>
-                    <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-[#777777]">
-                      <span className="truncate max-w-[100px]">{file.artist || 'Аудиофайл'}</span>
-                      <span>•</span>
-                      <span className={`px-1.5 py-0.2 rounded font-mono font-bold text-[9px] ${
-                        file.hiResInfo.isLossless
-                          ? 'bg-[#00E5FF]/10 text-[#00E5FF] border border-[#00E5FF]/20'
-                          : 'bg-[#1F1F1F] text-[#888888]'
-                      }`}>
-                        {file.hiResInfo.format} {file.hiResInfo.bitDepth ? `${file.hiResInfo.bitDepth}B` : ''}
-                      </span>
-                      <span>•</span>
-                      <span className="font-mono text-[#555555]">{file.size}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Add to library button */}
-                <div className="shrink-0">
-                  {inLibrary ? (
-                    <span className="flex items-center gap-1 text-[11px] text-[#00E5FF] font-medium px-2.5 py-1 bg-[#00E5FF]/10 border border-[#00E5FF]/20 rounded-xl">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#00E5FF]" />
-                      <span>В медиатеке</span>
-                    </span>
+                {/* Preview play button */}
+                <button
+                  onClick={(e) => handlePreview(e, file)}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-all ${
+                    isPreviewing
+                      ? 'bg-[#00E5FF] text-black border-[#00E5FF] shadow-[0_0_8px_#00E5FF]'
+                      : 'bg-[#1A040D] text-[#FF1A3C] border-[#FF1A3C]/40 hover:border-[#FF1A3C]'
+                  }`}
+                  title="Предпрослушивание"
+                >
+                  {isPreviewing ? (
+                    <Square className="w-3.5 h-3.5 fill-black" />
                   ) : (
-                    <button
-                      onClick={() => onAddTrackToLibrary(file)}
-                      className="px-3 py-1.5 bg-[#7C4DFF] hover:bg-[#6C3DFF] text-white font-bold text-xs rounded-xl flex items-center gap-1 shadow-sm transition-all"
-                    >
-                      <span>+ Добавить</span>
-                    </button>
+                    <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
                   )}
+                </button>
+
+                {/* File info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-[#FFFFFF] truncate">
+                      {file.title}
+                    </h4>
+                    <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40 shrink-0">
+                      {file.hiResInfo.format}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[9px] text-[#883344] mt-0.5">
+                    <span className="truncate">{file.artist}</span>
+                    <span>•</span>
+                    <span>{file.fileSize}</span>
+                  </div>
                 </div>
+
+                {/* Add to Library action button */}
+                <button
+                  onClick={() => onAddTrackToLibrary(file)}
+                  disabled={inLibrary}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all border shrink-0 ${
+                    inLibrary
+                      ? 'bg-[#0A0206] text-[#00E5FF] border-[#00E5FF]/30 cursor-default'
+                      : 'bg-[#FF1A3C] hover:bg-[#FF0033] text-black border-[#FF1A3C] shadow-[0_0_8px_rgba(255,26,60,0.5)] active:scale-95'
+                  }`}
+                >
+                  {inLibrary ? (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 text-[#00E5FF]" />
+                      <span>В БАЗЕ</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3 h-3" />
+                      <span>ДОБАВИТЬ</span>
+                    </>
+                  )}
+                </button>
               </div>
             );
           })
