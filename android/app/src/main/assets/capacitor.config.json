@@ -1,0 +1,6 @@
+{
+	"appId": "com.muaplay.app",
+	"appName": "MuAPlay",
+	"webDir": "dist",
+	"bundledWebRuntime": false
+}
