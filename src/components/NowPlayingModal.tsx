@@ -171,12 +171,12 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#070104]/98 backdrop-blur-2xl flex flex-col justify-between p-4 sm:p-6 overflow-hidden animate-in fade-in duration-300 font-sans">
+    <div className="fixed inset-0 z-50 bg-[#070104]/98 backdrop-blur-2xl flex flex-col justify-between pt-8 pb-4 px-4 sm:p-6 overflow-hidden animate-in fade-in duration-300 font-sans">
       {/* Subtle CRT Scanline overlay */}
       <div className="absolute inset-0 pointer-events-none cyberpunk-scanlines opacity-40 z-0" />
 
       {/* Top Bar Navigation */}
-      <div className="flex items-center justify-between text-[#E0E0E0] z-10 border-b border-[#FF1A3C]/40 pb-3">
+      <div className="flex items-center justify-between text-[#E0E0E0] z-10 border-b border-[#FF1A3C]/40 pb-3 pt-1">
         <button
           onClick={onClose}
           className="p-2 rounded-lg bg-[#150308] border border-[#FF1A3C]/50 text-[#FF4D6D] hover:text-white hover:border-[#FF1A3C] transition-colors"

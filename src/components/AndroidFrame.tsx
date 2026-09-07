@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Wifi, Smartphone, Maximize2, Cpu, Zap, Activity, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Smartphone, Maximize2, Cpu } from 'lucide-react';
 
 interface AndroidFrameProps {
   children: React.ReactNode;
@@ -11,20 +11,8 @@ interface AndroidFrameProps {
 export const AndroidFrame: React.FC<AndroidFrameProps> = ({
   children,
   activeTrackFormat,
-  onLockScreen,
 }) => {
   const [isPhoneMode, setIsPhoneMode] = useState(true);
-  const [currentTime, setCurrentTime] = useState('');
-
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <div className="h-[100dvh] w-full text-[#E0E0E0] flex flex-col items-center justify-center p-0 sm:p-4 font-sans select-none overflow-hidden bg-[#030103] cyberpunk-grid">
@@ -67,37 +55,12 @@ export const AndroidFrame: React.FC<AndroidFrameProps> = ({
             : 'max-w-4xl sm:h-[860px] sm:rounded-2xl sm:border sm:shadow-2xl'
         }`}
       >
-        {/* Android Top Notch & Cyberpunk Status Bar */}
-        <div className="pt-2 px-5 pb-2 flex items-center justify-between text-xs font-semibold z-30 border-b shrink-0 bg-[#120308]/95 text-[#FF4D6D] border-[#FF1A3C]/50">
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-black text-[#FF1A3C] text-[11px] tracking-wider">
-              {currentTime || '10:08'}
-            </span>
-            <span className="text-[9px] text-[#00E5FF] font-mono font-bold hidden xs:inline">
-              // K-SYS ONLINE
-            </span>
-          </div>
-
-          {/* Camera Notch simulation in phone mode */}
+        {/* Top Spacer for Native Android Status Bar */}
+        <div className="pt-8 sm:pt-4 shrink-0 bg-[#120308] relative">
+          {/* Subtle phone camera notch simulation in phone container mode */}
           {isPhoneMode && (
-            <div className="hidden sm:block w-20 h-4 rounded-b-xl border-x border-b bg-[#080205] border-[#FF1A3C]/40" />
+            <div className="hidden sm:block absolute top-1 left-1/2 -translate-x-1/2 w-20 h-3.5 rounded-b-xl border-x border-b bg-[#080205] border-[#FF1A3C]/40 z-30 pointer-events-none" />
           )}
-
-          <div className="flex items-center gap-2">
-            {onLockScreen && (
-              <button
-                onClick={onLockScreen}
-                title="Экран блокировки (AOD виджет)"
-                className="p-1 rounded bg-[#1C040E] border border-[#FF1A3C]/40 text-[#FF4D6D] hover:text-white hover:border-[#FF1A3C] transition-colors"
-              >
-                <Lock className="w-3 h-3" />
-              </button>
-            )}
-            <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold tracking-wider border bg-[#FF1A3C]/20 text-[#FF1A3C] border-[#FF1A3C]/40">
-              CYBER_DSP
-            </span>
-            <Wifi className="w-3.5 h-3.5 text-[#FF1A3C]" />
-          </div>
         </div>
 
         {/* Dynamic App Content */}

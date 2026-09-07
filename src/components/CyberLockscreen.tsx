@@ -168,7 +168,7 @@ export const CyberLockscreen: React.FC<CyberLockscreenProps> = ({
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="fixed inset-0 z-50 bg-[#000000] text-[#E0E0E0] flex flex-col justify-between p-4 sm:p-6 font-mono select-none overflow-hidden cyberpunk-scanlines animate-in fade-in duration-300"
+      className="fixed inset-0 z-50 bg-[#000000] text-[#E0E0E0] flex flex-col justify-between pt-8 pb-4 px-4 sm:p-6 font-mono select-none overflow-hidden cyberpunk-scanlines animate-in fade-in duration-300"
     >
       {/* Torch simulation flash */}
       {torchActive && (

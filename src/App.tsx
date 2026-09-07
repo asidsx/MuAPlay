@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Disc,
   FileText,
+  Lock,
 } from 'lucide-react';
 import { Track, Playlist, ScannedFile } from './types/music';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS, DOWNLOADS_FOLDER_FILES } from './data/sampleTracks';
@@ -821,31 +822,41 @@ export default function App() {
       onLockScreen={() => setIsLockscreenOpen(true)}
     >
       {/* App Cyberpunk Header */}
-      <header className="px-4 py-2.5 backdrop-blur-md border-b flex items-center justify-between z-10 shrink-0 bg-[#120308]/95 border-[#FF1A3C]/50 text-[#FF1A3C]">
-        <div className="flex items-center gap-2.5">
+      <header className="px-3.5 py-2.5 backdrop-blur-md border-b flex items-center justify-between z-10 shrink-0 bg-[#120308]/95 border-[#FF1A3C]/50 text-[#FF1A3C]">
+        <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#FF1A3C] text-black shadow-[0_0_12px_#FF1A3C]">
             <Music className="w-4 h-4 stroke-[2.5]" />
           </div>
           <div>
             <h1 className="text-xs font-black tracking-wider leading-none text-[#FFFFFF] font-mono">
-              MUAPLAY // CYBER_AUDIO 2077
+              MUAPLAY // CYBER_AUDIO
             </h1>
             <p className="text-[9px] font-mono mt-0.5 font-bold text-[#00E5FF]">
-              [ NEURAL_DAC // 192 kHz LOSSLESS ]
+              [ 192 kHz LOSSLESS ]
             </p>
           </div>
         </div>
 
-        {/* Global Search input */}
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="ПОИСК..."
-            className="w-28 sm:w-36 rounded-lg pl-7 pr-2 py-1 text-[11px] font-mono bg-[#18040C] border border-[#FF1A3C]/40 focus:border-[#FF1A3C] text-[#FF8095] placeholder-[#661828] focus:outline-none"
-          />
-          <Search className="w-3.5 h-3.5 absolute left-2 top-1.5 text-[#FF1A3C]" />
+        {/* Global Search input & Lockscreen launcher */}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ПОИСК..."
+              className="w-24 sm:w-32 rounded-lg pl-6 pr-2 py-1 text-[11px] font-mono bg-[#18040C] border border-[#FF1A3C]/40 focus:border-[#FF1A3C] text-[#FF8095] placeholder-[#661828] focus:outline-none"
+            />
+            <Search className="w-3 h-3 absolute left-2 top-2 text-[#FF1A3C]" />
+          </div>
+
+          <button
+            onClick={() => setIsLockscreenOpen(true)}
+            title="Экран блокировки (AOD виджет)"
+            className="p-1.5 rounded-lg bg-[#18040C] border border-[#FF1A3C]/50 text-[#FF1A3C] hover:bg-[#FF1A3C] hover:text-black transition-all"
+          >
+            <Lock className="w-3.5 h-3.5" />
+          </button>
         </div>
       </header>
 
