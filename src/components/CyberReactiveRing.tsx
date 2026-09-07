@@ -3,6 +3,7 @@ import { audioEngine } from '../services/audioEngine';
 
 interface CyberReactiveRingProps {
   isPlaying: boolean;
+  enabled?: boolean;
   size?: number;
   className?: string;
   children?: React.ReactNode;
@@ -29,6 +30,7 @@ interface Shockwave {
 
 export const CyberReactiveRing: React.FC<CyberReactiveRingProps> = ({
   isPlaying,
+  enabled = true,
   size = 320,
   className = '',
   children,
@@ -62,6 +64,22 @@ export const CyberReactiveRing: React.FC<CyberReactiveRingProps> = ({
     const center = size / 2;
     const baseRadius = size * 0.38; // Clean circular base hugging the cover
     const maxSpikeHeight = size * 0.14; // Max spike leap
+
+    // ECO / Power Saving Mode: If disabled, render faint static ring once and halt CPU/GPU render loop
+    if (!enabled) {
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(center, center, baseRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 26, 60, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      ctx.stroke();
+      ctx.restore();
+      return () => {
+        cancelAnimationFrame(animFrameRef.current);
+      };
+    }
 
     const render = () => {
       timeRef.current += 0.035;
@@ -370,7 +388,7 @@ export const CyberReactiveRing: React.FC<CyberReactiveRingProps> = ({
     return () => {
       cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, size]);
+  }, [isPlaying, size, enabled]);
 
   return (
     <div

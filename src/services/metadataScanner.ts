@@ -2,6 +2,52 @@ import jsmediatags from 'jsmediatags';
 import { Track, HiResInfo, AudioFormatType } from '../types/music';
 import { DEFAULT_ALBUM_ARTS } from '../data/sampleTracks';
 
+export const SUPPORTED_AUDIO_EXTENSIONS = new Set([
+  'mp3', 'flac', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 
+  'alac', 'aiff', 'aif', 'wma', 'dsf', 'dff', 'ape', 'mpc', 
+  'weba', 'mid', 'midi', 'm4b', 'caf'
+]);
+
+export const ACCEPT_AUDIO_INPUT_ATTR = 'audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.oga,.opus,.alac,.aiff,.aif,.wma,.dsf,.dff,.ape,.mpc,.weba';
+
+/**
+ * Strictly checks if a file is a valid audio file based on extension and MIME type.
+ * Completely rejects PDFs, documents, archives, videos, executables, etc.
+ */
+export function isSupportedAudioFile(file: File | { name: string; type?: string }): boolean {
+  if (!file || !file.name) return false;
+  
+  const name = file.name.trim();
+  const lastDot = name.lastIndexOf('.');
+  if (lastDot === -1) return false;
+
+  const ext = name.substring(lastDot + 1).toLowerCase().trim();
+
+  // Instant reject for known non-audio formats (PDF, DOC, ZIP, EXE, Images, etc.)
+  const nonAudioExtensions = [
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'odt',
+    'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'iso', 'dmg', 'apk', 'exe',
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'psd',
+    'html', 'htm', 'css', 'js', 'ts', 'jsx', 'tsx', 'json', 'xml', 'csv',
+    'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v'
+  ];
+  if (nonAudioExtensions.includes(ext)) {
+    return false;
+  }
+
+  // Check valid audio extensions
+  if (SUPPORTED_AUDIO_EXTENSIONS.has(ext)) {
+    return true;
+  }
+
+  // Check MIME type if extension is uncommon but starts with audio/
+  if (file.type && file.type.startsWith('audio/')) {
+    return true;
+  }
+
+  return false;
+}
+
 export interface FilenameParsedInfo {
   title: string;
   artist: string;
@@ -362,6 +408,10 @@ function probeAudioDuration(fileUrl: string): Promise<number> {
  * 2. If metadata fields are absent or generic, seamlessly falls back to smart filename parsing.
  */
 export async function parseAudioFileMetadata(file: File): Promise<Partial<Track>> {
+  if (!isSupportedAudioFile(file)) {
+    throw new Error(`Файл «${file.name}» не является поддерживаемым аудиофайлом.`);
+  }
+
   const fileUrl = URL.createObjectURL(file);
   const ext = file.name.split('.').pop()?.toUpperCase() as AudioFormatType || 'MP3';
 

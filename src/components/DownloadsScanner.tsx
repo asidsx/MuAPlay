@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ScannedFile, Track } from '../types/music';
 import { audioEngine } from '../services/audioEngine';
+import { ACCEPT_AUDIO_INPUT_ATTR } from '../services/metadataScanner';
 
 interface DownloadsScannerProps {
   scannedFiles: ScannedFile[];
@@ -119,7 +120,7 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
             ref={fileInputRef}
             type="file"
             multiple
-            accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
+            accept={ACCEPT_AUDIO_INPUT_ATTR}
             onChange={(e) => e.target.files && onFileUpload(e.target.files)}
             className="hidden"
           />

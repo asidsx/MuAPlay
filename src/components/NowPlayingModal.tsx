@@ -73,6 +73,22 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
   const [activeTab, setActiveTab] = useState<'cover' | 'lyrics' | 'details'>('cover');
   const [isMuted, setIsMuted] = useState(false);
   const [isTouchLocked, setIsTouchLocked] = useState(false);
+  const [isRingFxEnabled, setIsRingFxEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('cyber_ring_fx_enabled') !== 'false';
+  });
+  const [ringToast, setRingToast] = useState<string | null>(null);
+
+  const toggleRingAnimation = () => {
+    setIsRingFxEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem('cyber_ring_fx_enabled', String(next));
+      setRingToast(next ? '⚡ ЭКВАЛАЙЗЕР-ОРБИТА: ВКЛ' : '🔋 ЭКОНОМИЯ ЭНЕРГИИ: АНИМАЦИЯ ВЫКЛ');
+      setTimeout(() => {
+        setRingToast(null);
+      }, 2000);
+      return next;
+    });
+  };
 
   if (!isOpen || !track) return null;
 
@@ -185,18 +201,23 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
 
         {/* Tab 1: Spinning Reactive Holographic Equalizer Ring & Cyber Album Cover */}
         {activeTab === 'cover' && (
-          <div className="relative flex items-center justify-center my-auto py-2">
-            <CyberReactiveRing isPlaying={isPlaying} size={320}>
-              {/* Album Card inside Cyberpunk Frame */}
-              <div
-                className={`relative w-48 h-48 sm:w-52 sm:h-52 rounded-2xl overflow-hidden shadow-2xl border-2 border-[#FF1A3C]/80 transition-transform duration-300 ${
-                  isPlaying ? 'scale-100 shadow-[0_0_35px_rgba(255,26,60,0.5)]' : 'scale-95'
+          <div className="relative flex flex-col items-center justify-center my-auto py-2">
+            <CyberReactiveRing isPlaying={isPlaying} enabled={isRingFxEnabled} size={320}>
+              {/* Album Card inside Cyberpunk Frame (Click to toggle animation & save battery) */}
+              <button
+                onClick={toggleRingAnimation}
+                type="button"
+                className={`relative w-48 h-48 sm:w-52 sm:h-52 rounded-2xl overflow-hidden shadow-2xl border-2 transition-all duration-300 cursor-pointer group focus:outline-none ${
+                  isRingFxEnabled
+                    ? 'border-[#FF1A3C]/80 ' + (isPlaying ? 'scale-100 shadow-[0_0_35px_rgba(255,26,60,0.5)]' : 'scale-95')
+                    : 'border-[#555]/60 opacity-90 scale-95 shadow-lg grayscale-[15%]'
                 }`}
+                title="Нажмите на обложку для включения/отключения анимации эквалайзера (экономия батареи)"
               >
                 <CyberCoverImage
                   src={track.coverUrl}
                   alt={track.title}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A0206]/80 via-transparent to-transparent" />
                 
@@ -207,8 +228,24 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
                 <div className="absolute bottom-2 right-2 text-[9px] font-mono font-bold text-[#00E5FF] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#00E5FF]/40">
                   {track.hiResInfo?.isLossless ? 'LOSSLESS' : 'HI-RES'}
                 </div>
-              </div>
+
+                {/* Battery Saver Status Badge on Cover */}
+                {!isRingFxEnabled && (
+                  <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none animate-in fade-in">
+                    <span className="text-[9px] font-mono font-bold text-[#00E5FF] bg-[#0A0206]/90 px-2 py-0.5 rounded-full border border-[#00E5FF]/50 shadow-md">
+                      🔋 [ FX: OFF // ТАП ДЛЯ ВКЛ ]
+                    </span>
+                  </div>
+                )}
+              </button>
             </CyberReactiveRing>
+
+            {/* Quick Toggle Toast Notification */}
+            {ringToast && (
+              <div className="absolute -bottom-2 z-30 bg-[#150308]/95 border border-[#FF1A3C] text-white px-3 py-1 rounded-full text-[10px] font-mono tracking-wider shadow-[0_0_15px_rgba(255,26,60,0.6)] animate-in fade-in zoom-in-95 duration-200">
+                {ringToast}
+              </div>
+            )}
           </div>
         )}
 

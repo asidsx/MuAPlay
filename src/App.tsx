@@ -25,7 +25,7 @@ import {
 import { Track, Playlist, ScannedFile } from './types/music';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS, DOWNLOADS_FOLDER_FILES } from './data/sampleTracks';
 import { audioEngine } from './services/audioEngine';
-import { parseAudioFileMetadata, fetchMissingAlbumArt } from './services/metadataScanner';
+import { parseAudioFileMetadata, fetchMissingAlbumArt, isSupportedAudioFile, ACCEPT_AUDIO_INPUT_ATTR } from './services/metadataScanner';
 import { fetchLyricsOnline } from './services/lyricsService';
 import { saveAudioBlob, getAudioBlobUrl, deleteAudioBlob } from './services/audioStorage';
 import { prefetchTrackWaveform } from './services/waveformService';
@@ -103,6 +103,7 @@ export default function App() {
   const [isFetchingCovers, setIsFetchingCovers] = useState<boolean>(false);
   const [isFetchingLyrics, setIsFetchingLyrics] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [fileAlert, setFileAlert] = useState<string | null>(null);
 
   // Persist State to LocalStorage
   useEffect(() => {
@@ -572,103 +573,138 @@ export default function App() {
   };
 
   const handleFileUpload = async (fileList: FileList) => {
+    const rawFiles = Array.from(fileList);
+    
+    // Separate audio files, companion lyrics files, and completely rejected non-audio files (like PDF, DOC, ZIP, EXE)
+    const audioFiles: File[] = [];
+    const lyricsFiles: File[] = [];
+    const rejectedFiles: File[] = [];
+
+    for (const file of rawFiles) {
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith('.lrc') || (lower.endsWith('.txt') && !isSupportedAudioFile(file))) {
+        lyricsFiles.push(file);
+      } else if (isSupportedAudioFile(file)) {
+        audioFiles.push(file);
+      } else {
+        rejectedFiles.push(file);
+      }
+    }
+
+    // If non-audio files were chosen (e.g. PDF, DOCX, ZIP, MP4 video, etc.), reject them immediately with HUD toast
+    if (rejectedFiles.length > 0) {
+      const names = rejectedFiles.map((f) => `«${f.name}»`).join(', ');
+      const msg = rejectedFiles.length === 1
+        ? `⚠️ ОТКЛОНЕНО: ${names} не является аудиофайлом. Принимаются только форматы FLAC, MP3, WAV, M4A, OGG, OPUS, AAC.`
+        : `⚠️ ОТКЛОНЕНО: ${rejectedFiles.length} файлов не являются аудио (пропущены). Поддерживаются только FLAC, MP3, WAV, M4A, OGG, OPUS, AAC.`;
+      
+      setFileAlert(msg);
+      setTimeout(() => {
+        setFileAlert(null);
+      }, 4500);
+    }
+
+    // If no valid audio files were found, halt processing immediately (do not touch CPU/IndexedDB)
+    if (audioFiles.length === 0) {
+      return;
+    }
+
     const parsedFiles: ScannedFile[] = [];
     const newTracks: Track[] = [];
 
     // 1. Gather any companion .lrc or .txt lyrics files uploaded alongside audio files
     const companionLrcMap = new Map<string, string>();
-    for (let i = 0; i < fileList.length; i++) {
-      const f = fileList[i];
-      const lower = f.name.toLowerCase();
-      if (lower.endsWith('.lrc') || lower.endsWith('.txt')) {
-        try {
-          const content = await f.text();
-          if (content.trim()) {
-            const baseName = f.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
-            companionLrcMap.set(baseName, content.trim());
-          }
-        } catch {}
+    for (const f of lyricsFiles) {
+      try {
+        const content = await f.text();
+        if (content.trim()) {
+          const baseName = f.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+          companionLrcMap.set(baseName, content.trim());
+        }
+      } catch {}
+    }
+
+    // 2. Parse ONLY verified audio files
+    for (let i = 0; i < audioFiles.length; i++) {
+      const file = audioFiles[i];
+
+      try {
+        // Extract metadata tags with intelligent filename fallback
+        const parsed = await parseAudioFileMetadata(file);
+
+        // Determine lyrics:
+        // Priority 1: Embedded in file metadata tags (ID3 USLT/SYLT, Vorbis LYRICS, MP4 ©lyr)
+        // Priority 2: Companion .lrc file in the same upload batch
+        // Priority 3: Auto-query LRCLIB online using extracted artist & title
+        let trackLyrics = parsed.lyrics;
+
+        if (!trackLyrics) {
+          const baseName = file.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+          trackLyrics = companionLrcMap.get(baseName);
+        }
+
+        if (!trackLyrics && parsed.title && parsed.artist && !parsed.artist.includes('Неизвестный')) {
+          try {
+            const onlineLyrics = await fetchLyricsOnline({
+              title: parsed.title,
+              artist: parsed.artist,
+              album: parsed.album,
+              duration: parsed.duration,
+            });
+            if (onlineLyrics?.lyrics) {
+              trackLyrics = onlineLyrics.lyrics;
+            }
+          } catch {}
+        }
+
+        const scanned: ScannedFile = {
+          name: file.name,
+          path: `/storage/emulated/0/Download/${file.name}`,
+          size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+          extension: `.${file.name.split('.').pop()?.toLowerCase() || 'mp3'}`,
+          durationSec: parsed.duration || 180,
+          artist: parsed.artist,
+          title: parsed.title,
+          album: parsed.album,
+          hiResInfo: parsed.hiResInfo!,
+          previewUrl: parsed.url!,
+          coverUrl: parsed.coverUrl,
+          lyrics: trackLyrics,
+          alreadyInLibrary: true,
+        };
+
+        const trackObj: Track = {
+          id: `track-upload-${Date.now()}-${i}`,
+          title: parsed.title || file.name,
+          artist: parsed.artist || 'Загруженный файл',
+          album: parsed.album || 'Загрузки',
+          duration: parsed.duration || 180,
+          url: parsed.url!,
+          coverUrl: parsed.coverUrl,
+          filePath: scanned.path,
+          fileSize: scanned.size,
+          hiResInfo: parsed.hiResInfo!,
+          lyrics: trackLyrics,
+          year: parsed.year,
+          genre: parsed.genre,
+          isFavorite: false,
+          addedAt: Date.now(),
+        };
+
+        await saveAudioBlob(trackObj.id, file);
+        prefetchTrackWaveform(trackObj);
+
+        parsedFiles.push(scanned);
+        newTracks.push(trackObj);
+      } catch (err) {
+        console.warn('Skipping unparseable or rejected file:', file.name, err);
       }
     }
 
-    // 2. Parse audio files
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      const lower = file.name.toLowerCase();
-      // Skip companion text files as audio items
-      if (lower.endsWith('.lrc') || lower.endsWith('.txt')) continue;
-
-      // Extract metadata tags with intelligent filename fallback
-      const parsed = await parseAudioFileMetadata(file);
-
-      // Determine lyrics:
-      // Priority 1: Embedded in file metadata tags (ID3 USLT/SYLT, Vorbis LYRICS, MP4 ©lyr)
-      // Priority 2: Companion .lrc file in the same upload batch
-      // Priority 3: Auto-query LRCLIB online using extracted artist & title
-      let trackLyrics = parsed.lyrics;
-
-      if (!trackLyrics) {
-        const baseName = file.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
-        trackLyrics = companionLrcMap.get(baseName);
-      }
-
-      if (!trackLyrics && parsed.title && parsed.artist && !parsed.artist.includes('Неизвестный')) {
-        try {
-          const onlineLyrics = await fetchLyricsOnline({
-            title: parsed.title,
-            artist: parsed.artist,
-            album: parsed.album,
-            duration: parsed.duration,
-          });
-          if (onlineLyrics?.lyrics) {
-            trackLyrics = onlineLyrics.lyrics;
-          }
-        } catch {}
-      }
-
-      const scanned: ScannedFile = {
-        name: file.name,
-        path: `/storage/emulated/0/Download/${file.name}`,
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        extension: `.${file.name.split('.').pop()?.toLowerCase() || 'mp3'}`,
-        durationSec: parsed.duration || 180,
-        artist: parsed.artist,
-        title: parsed.title,
-        album: parsed.album,
-        hiResInfo: parsed.hiResInfo!,
-        previewUrl: parsed.url!,
-        coverUrl: parsed.coverUrl,
-        lyrics: trackLyrics,
-        alreadyInLibrary: true,
-      };
-
-      const trackObj: Track = {
-        id: `track-upload-${Date.now()}-${i}`,
-        title: parsed.title || file.name,
-        artist: parsed.artist || 'Загруженный файл',
-        album: parsed.album || 'Загрузки',
-        duration: parsed.duration || 180,
-        url: parsed.url!,
-        coverUrl: parsed.coverUrl,
-        filePath: scanned.path,
-        fileSize: scanned.size,
-        hiResInfo: parsed.hiResInfo!,
-        lyrics: trackLyrics,
-        year: parsed.year,
-        genre: parsed.genre,
-        isFavorite: false,
-        addedAt: Date.now(),
-      };
-
-      await saveAudioBlob(trackObj.id, file);
-      prefetchTrackWaveform(trackObj);
-
-      parsedFiles.push(scanned);
-      newTracks.push(trackObj);
+    if (parsedFiles.length > 0) {
+      setDownloadFiles((prev) => [...parsedFiles, ...prev]);
+      setTracks((prev) => [...newTracks, ...prev]);
     }
-
-    setDownloadFiles((prev) => [...parsedFiles, ...prev]);
-    setTracks((prev) => [...newTracks, ...prev]);
   };
 
   const handleAddTrackToLibrary = (scannedFile: ScannedFile) => {
@@ -802,6 +838,19 @@ export default function App() {
 
       {/* Main Screen Content Router based on Active Tab */}
       <main className="flex-1 overflow-hidden flex flex-col min-h-0 relative">
+        {/* File Format Alert Toast */}
+        {fileAlert && (
+          <div className="absolute top-2 inset-x-3 z-50 bg-[#1A030A]/95 border-2 border-[#FF1A3C] text-[#FF8095] p-2.5 rounded-xl shadow-[0_0_25px_rgba(255,26,60,0.8)] font-mono text-[11px] leading-relaxed flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top duration-300">
+            <span className="font-bold">{fileAlert}</span>
+            <button
+              onClick={() => setFileAlert(null)}
+              className="px-2 py-0.5 bg-[#FF1A3C] text-black font-black rounded text-[10px] shrink-0"
+            >
+              OK
+            </button>
+          </div>
+        )}
+
         {/* Tab 1: All Tracks (Треки) */}
         {activeTab === 'tracks' && (
           <div className="flex-1 flex flex-col overflow-hidden min-h-0 p-3 space-y-3 font-mono">
@@ -878,7 +927,7 @@ export default function App() {
                       <input
                         type="file"
                         multiple
-                        accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
+                        accept={ACCEPT_AUDIO_INPUT_ATTR}
                         onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
                         className="hidden"
                       />
