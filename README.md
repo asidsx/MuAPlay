@@ -10,15 +10,21 @@
 
 ---
 
-### 📊 Статистика и показатели проекта
+### 📊 Динамическая статистика и статус проекта
 
-[![Downloads](https://img.shields.io/badge/СКАЧИВАНИЙ-128K%2B-FF1A3C?style=flat-square&logo=google-play&logoColor=white)](https://github.com)
-[![Active Users](https://img.shields.io/badge/АКТИВНЫХ_СЛУШАТЕЛЕЙ-42.5K%2Fмес-00E5FF?style=flat-square&logo=audiomack&logoColor=black)](https://github.com)
-[![Visitors](https://visitor-badge.laobi.icu/badge?page_id=muaplay.cyber.audio.player&left_color=18040C&right_color=FF1A3C)](https://github.com)
-[![Rating](https://img.shields.io/badge/ОЦЕНКА-4.9%20%E2%98%85%20(14.2K%20отзывов)-FFD700?style=flat-square&logo=star&logoColor=black)](https://github.com)
-[![Platform](https://img.shields.io/badge/ПЛАТФОРМА-Android%208.0%2B%20%2F%20PWA-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com)
-[![License](https://img.shields.io/badge/ЛИЦЕНЗИЯ-100%25%20FREE%20%26%20OPEN%20SOURCE-FF1A3C?style=flat-square)](LICENSE)
-[![No Ads](https://img.shields.io/badge/РЕКЛАМА-ОТСУТСТВУЕТ%20(100%25%20FREE)-00E5FF?style=flat-square)](https://github)
+<!-- Реальный динамический счетчик посещений от hits.seeyoufarm.com -->
+[![Посещения](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fasidsx%2Fmuaplay-cyber-audio&count_bg=%23FF1A3C&title_bg=%2318040C&icon=&icon_color=%23E7E7E7&title=%D0%9F%D0%9E%D0%A1%D0%95%D0%A9%D0%95%D0%9D%D0%98%D0%AF&edge_flat=true)](https://github.com)
+<!-- Реальный счетчик просмотров GHPVC -->
+[![Просмотры](https://komarev.com/ghpvc/?username=asidsx-muaplay&color=ff1a3c&style=flat-square&label=%D0%9F%D0%A0%D0%9E%D0%A1%D0%9C%D0%9E%D0%A2%D0%A0%D0%AB)](https://github.com)
+<!-- Реальные загрузки через GitHub Releases API -->
+[![GitHub Downloads](https://img.shields.io/github/downloads/asidsx/muaplay-cyber-audio/total?color=00E5FF&style=flat-square&logo=github&label=%D0%A1%D0%9A%D0%90%D0%A7%D0%98%D0%92%D0%90%D0%9D%D0%98%D0%AF)](https://github.com)
+<!-- Реальные звезды GitHub -->
+[![GitHub Stars](https://img.shields.io/github/stars/asidsx/muaplay-cyber-audio?style=flat-square&logo=github&color=FFD700&label=%D0%97%D0%92%D0%81%D0%97%D0%94%D0%AB)](https://github.com)
+<!-- Реальная дата последнего коммита -->
+[![Last Commit](https://img.shields.io/github/last-commit/asidsx/muaplay-cyber-audio?style=flat-square&color=3DDC84&label=%D0%9E%D0%91%D0%9D%D0%9E%D0%92%D0%9B%D0%95%D0%9D%D0%9E)](https://github.com)
+<!-- Платформа и лицензия -->
+[![Платформа](https://img.shields.io/badge/%D0%9F%D0%9B%D0%90%D0%A2%D0%A4%D0%9E%D0%A0%D0%9C%D0%90-Android%208.0%2B%20%7C%20PWA-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com)
+[![Лицензия](https://img.shields.io/badge/%D0%9B%D0%98%D0%A6%D0%95%D0%9D%D0%97%D0%98%D0%AF-MIT%20(Open%20Source)-FF1A3C?style=flat-square)](LICENSE)
 
 </div>
 
