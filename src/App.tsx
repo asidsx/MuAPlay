@@ -310,7 +310,64 @@ export default function App() {
         } catch {}
       }
     }
-  }, [isPlaying, currentTime, duration]);
+
+    // Sync with Native Android Foreground Service Notification (for lockscreen media controls)
+    try {
+      if (currentTrack && (window as any).NativeAudioBridge?.updateMedia) {
+        (window as any).NativeAudioBridge.updateMedia(
+          currentTrack.title,
+          currentTrack.artist,
+          currentTrack.album || 'MuAPlay Lossless',
+          isPlaying,
+          Math.floor(duration || 180),
+          Math.floor(currentTime || 0)
+        );
+      }
+    } catch {}
+  }, [isPlaying, currentTime, duration, currentTrack]);
+
+  // Handle incoming native Android lockscreen & notification media actions
+  useEffect(() => {
+    const handleNativeAction = (event: any) => {
+      let action = '';
+      if (typeof event.detail === 'string') {
+        try {
+          const parsed = JSON.parse(event.detail);
+          action = parsed.action || '';
+        } catch {
+          action = event.detail;
+        }
+      } else if (event.detail && event.detail.action) {
+        action = event.detail.action;
+      } else if (event.action) {
+        action = event.action;
+      }
+
+      if (!action) return;
+
+      if (action === 'play') {
+        if (!isPlaying) handleTogglePlayPause();
+      } else if (action === 'pause') {
+        if (isPlaying) handleTogglePlayPause();
+      } else if (action === 'toggle') {
+        handleTogglePlayPause();
+      } else if (action === 'next') {
+        handleNextTrack();
+      } else if (action === 'prev') {
+        handlePrevTrack();
+      } else if (action.startsWith('seek:')) {
+        const seekMs = parseFloat(action.split(':')[1]);
+        if (!isNaN(seekMs)) {
+          handleSeek(seekMs / 1000);
+        }
+      }
+    };
+
+    window.addEventListener('muaplayAudioAction', handleNativeAction);
+    return () => {
+      window.removeEventListener('muaplayAudioAction', handleNativeAction);
+    };
+  }, [isPlaying, handleTogglePlayPause, handleNextTrack, handlePrevTrack, handleSeek]);
 
   // Playlists Management
   const handleCreatePlaylist = (name: string, description: string) => {
