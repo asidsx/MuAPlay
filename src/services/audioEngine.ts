@@ -79,16 +79,19 @@ class AudioEngine {
     }
   }
 
-  public async playTrack(url: string, trackId: string, fallbackGenerator?: () => string) {
+  public async playTrack(url: string, trackId: string, fallbackGenerator?: () => string, forceRestart = false) {
     this.ensureAudioContext();
     if (!this.audioElement) return;
 
     // Stop preview if running
     this.stopPreview();
 
-    if (this.currentTrackId !== trackId || !this.audioElement.src || this.audioElement.src !== url) {
+    const isSameTrack = this.currentTrackId === trackId && Boolean(this.audioElement.src);
+
+    if (!isSameTrack || forceRestart || this.audioElement.ended) {
       this.currentTrackId = trackId;
       this.audioElement.src = url;
+      this.audioElement.currentTime = 0;
     }
 
     try {
@@ -111,7 +114,10 @@ class AudioEngine {
 
   public resumeTrack() {
     this.ensureAudioContext();
-    if (this.audioElement) {
+    if (this.audioElement && this.audioElement.src) {
+      if (this.audioElement.ended) {
+        this.audioElement.currentTime = 0;
+      }
       this.audioElement.play().catch((err) => console.warn('Audio play error:', err));
     }
   }

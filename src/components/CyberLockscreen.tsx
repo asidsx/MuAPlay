@@ -224,7 +224,7 @@ export const CyberLockscreen: React.FC<CyberLockscreenProps> = ({
               </button>
             </div>
 
-            {/* Live Synchronized Subtitle Karaoke Line */}
+            {/* Live Synchronized Lyrics Karaoke Line */}
             {currentLyricLine && (
               <div className="bg-[#080104] border border-[#00E5FF]/40 rounded-xl px-3 py-1.5 text-center text-[10px] text-[#00E5FF] font-mono font-bold tracking-wide truncate drop-shadow-[0_0_8px_#00E5FF] animate-in fade-in duration-200">
                 <span className="text-[#FF1A3C] mr-1.5">♪</span>

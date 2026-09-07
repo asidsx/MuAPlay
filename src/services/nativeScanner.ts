@@ -1,6 +1,7 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import { Track, AudioFormatType } from '../types/music';
+import { parseFilenameInfo } from './metadataScanner';
 
 const AUDIO_EXTENSIONS = ['.mp3', '.flac', '.wav', '.m4a', '.aac', '.ogg', '.opus', '.wma'];
 
@@ -39,11 +40,10 @@ export async function scanNativeDownloadDirectory(): Promise<Track[]> {
             const ext = item.name.substring(item.name.lastIndexOf('.')).toLowerCase();
             if (AUDIO_EXTENSIONS.includes(ext)) {
               const webUrl = Capacitor.convertFileSrc(item.uri);
-              const cleanName = item.name.substring(0, item.name.lastIndexOf('.'));
-              
-              const parts = cleanName.split(' - ');
-              const artist = parts.length > 1 ? parts[0].trim() : 'Скачанный трек';
-              const title = parts.length > 1 ? parts.slice(1).join(' - ').trim() : cleanName;
+              const fnInfo = parseFilenameInfo(item.name);
+              const artist = fnInfo.artist;
+              const title = fnInfo.title;
+              const album = fnInfo.album || (dirPath.includes('/') ? dirPath.split('/').pop()! : 'Загрузки');
 
               const rawFormat = ext.replace('.', '').toUpperCase();
               const format: AudioFormatType = (['FLAC', 'WAV', 'MP3', 'M4A', 'AAC', 'OGG', 'OPUS', 'ALAC'].includes(rawFormat) ? rawFormat : 'MP3') as AudioFormatType;

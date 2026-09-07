@@ -90,7 +90,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
 
   const handleAutoFetch = async () => {
     setIsAutoFetching(true);
-    setFetchStatusMessage('Поиск LRC субтитров в сети...');
+    setFetchStatusMessage('Поиск лирики в сети (LRCLIB)...');
 
     try {
       const res = await fetchLyricsOnline({
@@ -102,12 +102,12 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
 
       if (res && res.lyrics) {
         onUpdateLyrics(track.id, res.lyrics);
-        setFetchStatusMessage(res.isSynced ? '✓ Субтитры синхронизированы (LRC)' : '✓ Текст загружен');
+        setFetchStatusMessage(res.isSynced ? '✓ Синхронная лирика (LRC) загружена' : '✓ Текст песни загружен');
       } else {
-        setFetchStatusMessage('Субтитры не найдены в базе');
+        setFetchStatusMessage('Лирика не найдена в онлайн-базе');
       }
     } catch (err) {
-      setFetchStatusMessage('Ошибка сети при запросе субтитров');
+      setFetchStatusMessage('Ошибка сети при запросе лирики');
     } finally {
       setIsAutoFetching(false);
       setTimeout(() => setFetchStatusMessage(null), 4000);
@@ -122,7 +122,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
       const text = await readLocalLrcFile(file);
       if (text) {
         onUpdateLyrics(track.id, text);
-        setFetchStatusMessage(`✓ Файл ${file.name} применен`);
+        setFetchStatusMessage(`✓ Файл лирики ${file.name} применен`);
         setTimeout(() => setFetchStatusMessage(null), 3000);
       }
     } catch {
@@ -165,7 +165,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
     const lyrics = item.syncedLyrics || item.plainLyrics;
     if (lyrics) {
       onUpdateLyrics(track.id, lyrics);
-      setFetchStatusMessage(item.syncedLyrics ? '✓ Синхронизированный LRC применен' : '✓ Текст применен');
+      setFetchStatusMessage(item.syncedLyrics ? '✓ Синхронная лирика (LRC) применена' : '✓ Текст песни применен');
       setIsSearchModalOpen(false);
       setTimeout(() => setFetchStatusMessage(null), 3000);
     }
@@ -180,7 +180,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
 
   return (
     <div className="w-full max-w-lg h-72 sm:h-80 flex flex-col bg-[#0B0206]/95 border border-[#FF1A3C]/40 rounded-2xl overflow-hidden my-auto font-mono shadow-[0_0_25px_rgba(255,26,60,0.15)]">
-      {/* Subtitles Action & Status Bar */}
+      {/* Lyrics Action & Status Bar */}
       <div className="px-3 py-2 bg-[#140309] border-b border-[#FF1A3C]/30 flex flex-wrap items-center justify-between gap-2 text-[10px]">
         {/* Status Indicator */}
         <div className="flex items-center gap-1.5 min-w-0">
@@ -195,12 +195,12 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
           />
           <span className="font-bold truncate text-[#E0E0E0]">
             {isAutoFetching
-              ? 'ПОДКАЧКА СУБТИТРОВ...'
+              ? 'ПОИСК ЛИРИКИ...'
               : parsedLRC.hasTimestamps
-              ? `LRC СИНХРОН [${parsedLRC.lines.length} СТР.]`
+              ? `LRC ЛИРИКА [${parsedLRC.lines.length} СТР.]`
               : track.lyrics
-              ? 'ОБЫЧНЫЙ ТЕКСТ'
-              : 'СУБТИТРЫ ОТСУТСТВУЮТ'}
+              ? 'ТЕКСТ ПЕСНИ'
+              : 'ЛИРИКА ОТСУТСТВУЕТ'}
           </span>
         </div>
 
@@ -213,7 +213,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
               <button
                 onClick={() => setOffsetSec((prev) => Math.max(-5, prev - 0.5))}
                 className="hover:text-[#00E5FF] px-1 text-[#FF1A3C] font-black"
-                title="Сдвинуть субтитры назад на 0.5 сек"
+                title="Сдвинуть лирику назад на 0.5 сек"
               >
                 -0.5s
               </button>
@@ -223,7 +223,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
               <button
                 onClick={() => setOffsetSec((prev) => Math.min(5, prev + 0.5))}
                 className="hover:text-[#00E5FF] px-1 text-[#FF1A3C] font-black"
-                title="Сдвинуть субтитры вперед на 0.5 сек"
+                title="Сдвинуть лирику вперед на 0.5 сек"
               >
                 +0.5s
               </button>
@@ -244,7 +244,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
           <button
             onClick={handleOpenSearchModal}
             className="p-1 rounded bg-[#1A040D] hover:bg-[#250514] text-[#FF4D6D] border border-[#FF1A3C]/40 transition-colors"
-            title="Ручной поиск в базе субтитров"
+            title="Ручной поиск в базе лирики"
           >
             <Search className="w-3 h-3" />
           </button>
@@ -253,7 +253,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
           <button
             onClick={() => fileInputRef.current?.click()}
             className="p-1 rounded bg-[#1A040D] hover:bg-[#250514] text-[#E0E0E0] border border-[#FF1A3C]/40 transition-colors"
-            title="Загрузить локальный файл .LRC"
+            title="Загрузить файл .LRC"
           >
             <Upload className="w-3 h-3 text-[#FF1A3C]" />
           </button>
@@ -270,7 +270,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
             <button
               onClick={handleCopyLyrics}
               className="p-1 rounded bg-[#1A040D] hover:bg-[#250514] text-[#E0E0E0] border border-[#FF1A3C]/40 transition-colors"
-              title="Скопировать текст"
+              title="Скопировать лирику"
             >
               {isCopied ? <Check className="w-3 h-3 text-[#00FF66]" /> : <Copy className="w-3 h-3 text-[#883344]" />}
             </button>
@@ -337,9 +337,9 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
           <div className="h-full flex flex-col items-center justify-center py-10 space-y-3 text-center">
             <Radio className="w-10 h-10 text-[#FF1A3C] opacity-40 animate-pulse" />
             <div className="space-y-1">
-              <p className="text-xs font-bold text-[#E0E0E0]">[ СУБТИТРЫ НЕ НАЙДЕНЫ ]</p>
+              <p className="text-xs font-bold text-[#E0E0E0]">[ ЛИРИКА НЕ НАЙДЕНА ]</p>
               <p className="text-[10px] text-[#883344] max-w-xs">
-                Попробуйте выполнить поиск в глобальной базе LRCLIB или загрузить локальный .LRC файл
+                Лирика не обнаружена в метаданных трека. Выполните поиск в базе LRCLIB или импортируйте файл .LRC
               </p>
             </div>
 
@@ -380,7 +380,7 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
             <div className="flex items-center justify-between pb-2 border-b border-[#FF1A3C]/30">
               <span className="text-xs font-bold text-[#FFFFFF] flex items-center gap-1.5">
                 <Search className="w-4 h-4 text-[#00E5FF]" />
-                <span>ПОИСК СУБТИТРОВ (LRCLIB)</span>
+                <span>ПОИСК ЛИРИКИ (LRCLIB)</span>
               </span>
               <button
                 onClick={() => setIsSearchModalOpen(false)}

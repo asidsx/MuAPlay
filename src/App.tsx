@@ -114,7 +114,14 @@ export default function App() {
 
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
     const handleLoadedMetadata = () => setDuration(audio.duration || 180);
-    const handleEnded = () => handleNextTrack();
+    const handleEnded = () => {
+      if (isRepeat && currentTrack) {
+        audioEngine.seek(0);
+        audioEngine.resumeTrack();
+      } else {
+        handleNextTrack();
+      }
+    };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -125,7 +132,7 @@ export default function App() {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [currentTrackId, isRepeat, isShuffle]);
+  }, [currentTrackId, isRepeat, isShuffle, currentTrack]);
 
   // Audio Controls
   const getPlayableUrl = async (track: Track): Promise<string | null> => {
@@ -160,6 +167,12 @@ export default function App() {
   };
 
   const handlePlayTrack = async (track: Track) => {
+    // If the user tapped on the currently loaded track, toggle play/pause instead of restarting
+    if (currentTrackId === track.id) {
+      handleTogglePlayPause();
+      return;
+    }
+
     setCurrentTrackId(track.id);
 
     const playUrl = await getPlayableUrl(track);
@@ -170,7 +183,8 @@ export default function App() {
     }
 
     setIsPlaying(true);
-    audioEngine.playTrack(playUrl, track.id);
+    const fallbackGen = () => generateSyntheticAudioBlob('synthwave', track.duration || 180);
+    audioEngine.playTrack(playUrl, track.id, fallbackGen, true);
   };
 
   const handleDeleteTrack = async (trackId: string, e?: React.MouseEvent) => {
@@ -213,9 +227,18 @@ export default function App() {
       audioEngine.pauseTrack();
     } else {
       setIsPlaying(true);
+      const audio = audioEngine.getAudioElement();
+      // If the current track is already loaded in the audio element and not ended, resume from current position
+      if (audioEngine.currentTrackId === currentTrack.id && audio?.src && !audio.ended) {
+        audioEngine.resumeTrack();
+        return;
+      }
+
       const playUrl = await getPlayableUrl(currentTrack);
-      const fallbackGen = () => generateSyntheticAudioBlob('synthwave', currentTrack.duration || 180);
-      audioEngine.playTrack(playUrl, currentTrack.id, fallbackGen);
+      if (playUrl) {
+        const fallbackGen = () => generateSyntheticAudioBlob('synthwave', currentTrack.duration || 180);
+        audioEngine.playTrack(playUrl, currentTrack.id, fallbackGen);
+      }
     }
   };
 
@@ -496,9 +519,56 @@ export default function App() {
     const parsedFiles: ScannedFile[] = [];
     const newTracks: Track[] = [];
 
+    // 1. Gather any companion .lrc or .txt lyrics files uploaded alongside audio files
+    const companionLrcMap = new Map<string, string>();
+    for (let i = 0; i < fileList.length; i++) {
+      const f = fileList[i];
+      const lower = f.name.toLowerCase();
+      if (lower.endsWith('.lrc') || lower.endsWith('.txt')) {
+        try {
+          const content = await f.text();
+          if (content.trim()) {
+            const baseName = f.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+            companionLrcMap.set(baseName, content.trim());
+          }
+        } catch {}
+      }
+    }
+
+    // 2. Parse audio files
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
+      const lower = file.name.toLowerCase();
+      // Skip companion text files as audio items
+      if (lower.endsWith('.lrc') || lower.endsWith('.txt')) continue;
+
+      // Extract metadata tags with intelligent filename fallback
       const parsed = await parseAudioFileMetadata(file);
+
+      // Determine lyrics:
+      // Priority 1: Embedded in file metadata tags (ID3 USLT/SYLT, Vorbis LYRICS, MP4 ©lyr)
+      // Priority 2: Companion .lrc file in the same upload batch
+      // Priority 3: Auto-query LRCLIB online using extracted artist & title
+      let trackLyrics = parsed.lyrics;
+
+      if (!trackLyrics) {
+        const baseName = file.name.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+        trackLyrics = companionLrcMap.get(baseName);
+      }
+
+      if (!trackLyrics && parsed.title && parsed.artist && !parsed.artist.includes('Неизвестный')) {
+        try {
+          const onlineLyrics = await fetchLyricsOnline({
+            title: parsed.title,
+            artist: parsed.artist,
+            album: parsed.album,
+            duration: parsed.duration,
+          });
+          if (onlineLyrics?.lyrics) {
+            trackLyrics = onlineLyrics.lyrics;
+          }
+        } catch {}
+      }
 
       const scanned: ScannedFile = {
         name: file.name,
@@ -512,6 +582,7 @@ export default function App() {
         hiResInfo: parsed.hiResInfo!,
         previewUrl: parsed.url!,
         coverUrl: parsed.coverUrl,
+        lyrics: trackLyrics,
         alreadyInLibrary: true,
       };
 
@@ -526,6 +597,9 @@ export default function App() {
         filePath: scanned.path,
         fileSize: scanned.size,
         hiResInfo: parsed.hiResInfo!,
+        lyrics: trackLyrics,
+        year: parsed.year,
+        genre: parsed.genre,
         isFavorite: false,
         addedAt: Date.now(),
       };
@@ -555,6 +629,7 @@ export default function App() {
       filePath: scannedFile.path,
       fileSize: scannedFile.size,
       hiResInfo: scannedFile.hiResInfo,
+      lyrics: scannedFile.lyrics,
       isFavorite: false,
       addedAt: Date.now(),
     };
@@ -709,10 +784,10 @@ export default function App() {
                   onClick={handleAutoFetchAllLyrics}
                   disabled={isFetchingLyrics}
                   className="px-2 py-1 bg-[#18040C] hover:bg-[#250412] text-[#FF4D6D] border border-[#FF1A3C]/40 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors"
-                  title="Подкачать синхронизированные субтитры (LRC)"
+                  title="Подкачать синхронизированную лирику (LRC)"
                 >
                   <FileText className={`w-3 h-3 text-[#FF1A3C] ${isFetchingLyrics ? 'animate-spin' : ''}`} />
-                  <span>{isFetchingLyrics ? 'LRC...' : 'СУБТИТРЫ'}</span>
+                  <span>{isFetchingLyrics ? 'LRC...' : 'ЛИРИКА'}</span>
                 </button>
               </div>
             </div>
@@ -806,7 +881,7 @@ export default function App() {
                             {track.lyrics && (
                               <span
                                 className="px-1 py-0.2 rounded font-bold text-[8px] bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40"
-                                title="Субтитры загружены"
+                                title="Лирика загружена (LRC)"
                               >
                                 LRC
                               </span>

@@ -156,7 +156,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
             }`}
           >
             <Radio className="w-3 h-3" />
-            <span>[ СУБТИТРЫ / LRC ]</span>
+            <span>[ ЛИРИКА / LRC ]</span>
           </button>
           <button
             onClick={() => setActiveTab('details')}

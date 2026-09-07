@@ -196,7 +196,7 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
 
             return (
               <div
-                key={file.id}
+                key={file.path || file.name}
                 className="bg-[#120308] border border-[#FF1A3C]/35 hover:border-[#FF1A3C]/70 rounded-xl p-2.5 flex items-center justify-between gap-2.5 transition-all shadow-sm"
               >
                 {/* Preview play button */}
@@ -225,11 +225,19 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
                     <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40 shrink-0">
                       {file.hiResInfo.format}
                     </span>
+                    {file.lyrics && (
+                      <span
+                        className="px-1 py-0.2 rounded text-[8px] font-bold bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40 shrink-0"
+                        title="Лирика (LRC)"
+                      >
+                        LRC
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-[9px] text-[#883344] mt-0.5">
                     <span className="truncate">{file.artist}</span>
                     <span>•</span>
-                    <span>{file.fileSize}</span>
+                    <span>{file.size}</span>
                   </div>
                 </div>
 

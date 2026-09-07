@@ -57,6 +57,7 @@ export interface ScannedFile {
   hiResInfo: HiResInfo;
   previewUrl: string; // url to audio for instant preview
   coverUrl?: string;
+  lyrics?: string;
   alreadyInLibrary: boolean;
 }
 
