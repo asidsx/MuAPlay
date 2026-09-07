@@ -38,15 +38,7 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
 }) => {
   const [filterFormat, setFilterFormat] = useState<string>('ALL');
   const [previewingPath, setPreviewingPath] = useState<string | null>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
-    if (folderInputRef.current) {
-      folderInputRef.current.setAttribute('webkitdirectory', '');
-      folderInputRef.current.setAttribute('directory', '');
-    }
-  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -60,11 +52,8 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
   };
 
   const triggerFolderPicker = () => {
-    if (folderInputRef.current) {
-      folderInputRef.current.click();
-    } else {
-      onScanDownloadsFolder();
-    }
+    // Native directory scanning via Capacitor Filesystem
+    onScanDownloadsFolder();
   };
 
   const handlePreview = (e: React.MouseEvent, file: ScannedFile) => {
@@ -108,14 +97,7 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
             </div>
           </div>
 
-          {/* Hidden inputs for Folder and File selection */}
-          <input
-            ref={folderInputRef}
-            type="file"
-            multiple
-            onChange={(e) => e.target.files && onFileUpload(e.target.files)}
-            className="hidden"
-          />
+          {/* Hidden input for File selection */}
           <input
             ref={fileInputRef}
             type="file"

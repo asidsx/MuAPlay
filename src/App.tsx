@@ -705,7 +705,7 @@ export default function App() {
         };
 
         await saveAudioBlob(trackObj.id, file);
-        prefetchTrackWaveform(trackObj);
+        // prefetchTrackWaveform(trackObj); // Removed to prevent OOM crash during batch uploads
 
         parsedFiles.push(scanned);
         newTracks.push(trackObj);

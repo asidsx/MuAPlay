@@ -8,7 +8,7 @@ export const SUPPORTED_AUDIO_EXTENSIONS = new Set([
   'weba', 'mid', 'midi', 'm4b', 'caf'
 ]);
 
-export const ACCEPT_AUDIO_INPUT_ATTR = 'audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.oga,.opus,.alac,.aiff,.aif,.wma,.dsf,.dff,.ape,.mpc,.weba';
+export const ACCEPT_AUDIO_INPUT_ATTR = 'audio/*';
 
 /**
  * Strictly checks if a file is a valid audio file based on extension and MIME type.
