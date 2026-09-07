@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Track } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
+import { CyberLyricsView } from './CyberLyricsView';
 
 interface NowPlayingModalProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ interface NowPlayingModalProps {
   onToggleFavorite: (trackId: string) => void;
   onOpenEQ: () => void;
   onLockScreen?: () => void;
+  onUpdateLyrics?: (trackId: string, lyrics: string) => void;
 }
 
 export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
@@ -62,6 +64,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
   onToggleFavorite,
   onOpenEQ,
   onLockScreen,
+  onUpdateLyrics,
 }) => {
   const [activeTab, setActiveTab] = useState<'cover' | 'lyrics' | 'details'>('cover');
   const [isMuted, setIsMuted] = useState(false);
@@ -153,7 +156,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
             }`}
           >
             <Radio className="w-3 h-3" />
-            <span>[ ТЕКСТ ]</span>
+            <span>[ СУБТИТРЫ / LRC ]</span>
           </button>
           <button
             onClick={() => setActiveTab('details')}
@@ -213,27 +216,16 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Synced Lyrics */}
+        {/* Tab 2: Synced Cyber Subtitles & Lyrics (LRCLIB + Local LRC) */}
         {activeTab === 'lyrics' && (
-          <div className="w-full max-w-md h-64 sm:h-72 bg-[#120308]/90 border border-[#FF1A3C]/40 rounded-2xl p-4 overflow-y-auto space-y-3 text-center my-auto font-mono">
-            {track.lyrics ? (
-              track.lyrics.split('\n').map((line, idx) => (
-                <p
-                  key={idx}
-                  className={`text-xs sm:text-sm font-medium transition-all ${
-                    idx === 1 ? 'text-[#00E5FF] font-bold scale-105 text-glow-cyan' : 'text-[#883344]'
-                  }`}
-                >
-                  {line.replace(/\[\d{2}:\d{2}\.\d{2}\]/, '')}
-                </p>
-              ))
-            ) : (
-              <div className="py-16 text-[#883344] space-y-2">
-                <Radio className="w-8 h-8 mx-auto opacity-50 text-[#FF1A3C]" />
-                <p className="text-xs">[ НЕЙРО-ТЕКСТ НЕДОСТУПЕН ]</p>
-              </div>
-            )}
-          </div>
+          <CyberLyricsView
+            track={track}
+            currentTime={currentTime}
+            duration={duration}
+            isPlaying={isPlaying}
+            onSeek={onSeek}
+            onUpdateLyrics={onUpdateLyrics || (() => {})}
+          />
         )}
 
         {/* Tab 3: Detailed Hi-Res Audio Format Telemetry */}

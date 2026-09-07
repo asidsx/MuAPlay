@@ -20,11 +20,13 @@ import {
   MoreVertical,
   ShieldCheck,
   Disc,
+  FileText,
 } from 'lucide-react';
 import { Track, Playlist, ScannedFile } from './types/music';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS, DOWNLOADS_FOLDER_FILES } from './data/sampleTracks';
 import { audioEngine } from './services/audioEngine';
 import { parseAudioFileMetadata, fetchMissingAlbumArt } from './services/metadataScanner';
+import { fetchLyricsOnline } from './services/lyricsService';
 import { saveAudioBlob, getAudioBlobUrl, deleteAudioBlob } from './services/audioStorage';
 import { generateSyntheticAudioBlob } from './utils/audioGenerator';
 import { scanNativeDownloadDirectory, loadNativeFileAsBlob } from './services/nativeScanner';
@@ -84,6 +86,7 @@ export default function App() {
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
   const [isScanningDownloads, setIsScanningDownloads] = useState<boolean>(false);
   const [isFetchingCovers, setIsFetchingCovers] = useState<boolean>(false);
+  const [isFetchingLyrics, setIsFetchingLyrics] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Persist State to LocalStorage
@@ -578,6 +581,39 @@ export default function App() {
     setIsFetchingCovers(false);
   };
 
+  // Update lyrics for an individual track (persists to state & localStorage)
+  const handleUpdateTrackLyrics = (trackId: string, lyrics: string) => {
+    setTracks((prev) =>
+      prev.map((t) => (t.id === trackId ? { ...t, lyrics } : t))
+    );
+  };
+
+  // Batch fetch lyrics for all tracks in library missing lyrics
+  const handleAutoFetchAllLyrics = async () => {
+    setIsFetchingLyrics(true);
+    const updatedTracks = [...tracks];
+
+    for (let i = 0; i < updatedTracks.length; i++) {
+      const t = updatedTracks[i];
+      if (!t.lyrics) {
+        try {
+          const res = await fetchLyricsOnline({
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            duration: t.duration,
+          });
+          if (res && res.lyrics) {
+            updatedTracks[i] = { ...t, lyrics: res.lyrics };
+          }
+        } catch {}
+      }
+    }
+
+    setTracks(updatedTracks);
+    setIsFetchingLyrics(false);
+  };
+
   // Filtered tracks for Search
   const filteredTracks = tracks.filter((t) => {
     const q = searchQuery.toLowerCase();
@@ -668,6 +704,16 @@ export default function App() {
                   <Sparkles className="w-3 h-3 text-[#00E5FF]" />
                   <span>ОБЛОЖКИ</span>
                 </button>
+
+                <button
+                  onClick={handleAutoFetchAllLyrics}
+                  disabled={isFetchingLyrics}
+                  className="px-2 py-1 bg-[#18040C] hover:bg-[#250412] text-[#FF4D6D] border border-[#FF1A3C]/40 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors"
+                  title="Подкачать синхронизированные субтитры (LRC)"
+                >
+                  <FileText className={`w-3 h-3 text-[#FF1A3C] ${isFetchingLyrics ? 'animate-spin' : ''}`} />
+                  <span>{isFetchingLyrics ? 'LRC...' : 'СУБТИТРЫ'}</span>
+                </button>
               </div>
             </div>
 
@@ -757,6 +803,14 @@ export default function App() {
                             <span className="px-1 py-0.2 rounded font-bold text-[8px] bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40">
                               {track.hiResInfo.format}
                             </span>
+                            {track.lyrics && (
+                              <span
+                                className="px-1 py-0.2 rounded font-bold text-[8px] bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40"
+                                title="Субтитры загружены"
+                              >
+                                LRC
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -948,6 +1002,7 @@ export default function App() {
           setIsNowPlayingOpen(false);
           setIsLockscreenOpen(true);
         }}
+        onUpdateLyrics={handleUpdateTrackLyrics}
       />
 
       {/* Cyberpunk Smartphone Lock Screen Widget */}

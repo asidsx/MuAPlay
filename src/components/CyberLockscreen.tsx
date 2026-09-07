@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Track } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
+import { parseLRC, getActiveLyricIndex } from '../services/lyricsService';
 
 interface CyberLockscreenProps {
   isOpen: boolean;
@@ -52,6 +53,17 @@ export const CyberLockscreen: React.FC<CyberLockscreenProps> = ({
   const [currentSecondsStr, setCurrentSecondsStr] = useState('');
   const [currentDateStr, setCurrentDateStr] = useState('');
   const [torchActive, setTorchActive] = useState(false);
+
+  // Synchronized Cyber Subtitles
+  const parsedLRC = React.useMemo(() => {
+    return parseLRC(track?.lyrics || '');
+  }, [track?.lyrics]);
+
+  const currentLyricLine = React.useMemo(() => {
+    if (!parsedLRC.hasTimestamps || parsedLRC.lines.length === 0) return null;
+    const idx = getActiveLyricIndex(parsedLRC.lines, currentTime);
+    return idx >= 0 && parsedLRC.lines[idx]?.text ? parsedLRC.lines[idx].text : null;
+  }, [parsedLRC, currentTime]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -211,6 +223,14 @@ export const CyberLockscreen: React.FC<CyberLockscreenProps> = ({
                 />
               </button>
             </div>
+
+            {/* Live Synchronized Subtitle Karaoke Line */}
+            {currentLyricLine && (
+              <div className="bg-[#080104] border border-[#00E5FF]/40 rounded-xl px-3 py-1.5 text-center text-[10px] text-[#00E5FF] font-mono font-bold tracking-wide truncate drop-shadow-[0_0_8px_#00E5FF] animate-in fade-in duration-200">
+                <span className="text-[#FF1A3C] mr-1.5">♪</span>
+                {currentLyricLine}
+              </div>
+            )}
 
             {/* Mini Green Cyber Waveform Scrubber inside Lockscreen Widget */}
             <div className="pt-0.5">
