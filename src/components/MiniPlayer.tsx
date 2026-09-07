@@ -11,6 +11,7 @@ interface MiniPlayerProps {
   onNext: () => void;
   onOpenNowPlaying: () => void;
   onToggleFavorite: (trackId: string) => void;
+  onSeek?: (seconds: number) => void;
 }
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({
@@ -22,22 +23,66 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   onNext,
   onOpenNowPlaying,
   onToggleFavorite,
+  onSeek,
 }) => {
   if (!track) return null;
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercent = duration > 0 ? Math.min(Math.max((currentTime / duration) * 100, 0), 100) : 0;
+
+  // 36 mini waveform bar heights
+  const miniBars = [
+    0.3, 0.5, 0.8, 0.4, 0.6, 0.9, 0.7, 0.5, 0.85, 1.0, 0.65, 0.4, 0.75, 0.9, 0.55, 0.7,
+    0.85, 0.95, 0.6, 0.45, 0.8, 0.7, 0.9, 1.0, 0.75, 0.5, 0.65, 0.85, 0.6, 0.4, 0.7, 0.9,
+    0.5, 0.35, 0.6, 0.4
+  ];
+
+  const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onSeek || duration <= 0) return;
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const newPercent = clickX / rect.width;
+    onSeek(newPercent * duration);
+  };
 
   return (
     <div className="mx-2 mb-1 z-30 shrink-0">
       <div
         onClick={onOpenNowPlaying}
-        className="relative bg-[#100308]/95 backdrop-blur-xl border border-[#FF1A3C]/60 hover:border-[#FF1A3C] rounded-xl p-2.5 shadow-[0_0_20px_rgba(255,26,60,0.25)] flex items-center justify-between cursor-pointer group transition-all"
+        className="relative bg-[#100308]/95 backdrop-blur-xl border border-[#FF1A3C]/60 hover:border-[#FF1A3C] rounded-xl p-2.5 pt-3.5 shadow-[0_0_20px_rgba(255,26,60,0.25)] flex items-center justify-between cursor-pointer group transition-all"
       >
-        {/* Neon Cyber Progress Bar Header */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-[#080205] rounded-t-xl overflow-hidden">
+        {/* Visible Cyberpunk Green Mini Waveform Seek Bar in Frame */}
+        <div
+          onClick={handleSeekClick}
+          title="Нажмите для перемотки"
+          className="absolute top-0 left-0 right-0 h-2.5 bg-[#011409]/90 border-b border-[#00FF66]/50 rounded-t-xl overflow-hidden flex items-center justify-between px-1.5 cursor-pointer z-10 hover:h-3 transition-all"
+        >
+          {/* Subtle center line */}
+          <div className="absolute inset-x-0 top-1/2 h-[1px] bg-[#00FF66]/20 pointer-events-none" />
+
+          {/* Waveform vertical bars */}
+          <div className="w-full h-full flex items-center justify-between gap-[1px]">
+            {miniBars.map((height, idx) => {
+              const barPos = (idx / (miniBars.length - 1)) * 100;
+              const isPlayed = barPos <= progressPercent;
+              return (
+                <div
+                  key={idx}
+                  className={`flex-1 rounded-[1px] transition-colors ${
+                    isPlayed
+                      ? 'bg-[#00FF66] shadow-[0_0_4px_#00FF66]'
+                      : 'bg-[#00FF66]/20'
+                  }`}
+                  style={{ height: `${Math.max(height * 85, 20)}%` }}
+                />
+              );
+            })}
+          </div>
+
+          {/* Laser Scrubber Head */}
           <div
-            className="h-full bg-gradient-to-r from-[#FF1A3C] via-[#FF0055] to-[#00E5FF] transition-all duration-300 shadow-[0_0_8px_#FF1A3C]"
-            style={{ width: `${progressPercent}%` }}
+            className="absolute top-0 bottom-0 w-[2px] bg-[#00FF66] shadow-[0_0_8px_#00FF66] pointer-events-none"
+            style={{ left: `${progressPercent}%` }}
           />
         </div>
 

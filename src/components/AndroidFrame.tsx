@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Wifi, Smartphone, Maximize2, Cpu, Zap, Activity } from 'lucide-react';
+import { Wifi, Smartphone, Maximize2, Cpu, Zap, Activity, Lock } from 'lucide-react';
 
 interface AndroidFrameProps {
   children: React.ReactNode;
   activeTrackFormat?: string;
   isLossless?: boolean;
+  onLockScreen?: () => void;
 }
 
 export const AndroidFrame: React.FC<AndroidFrameProps> = ({
   children,
   activeTrackFormat,
+  onLockScreen,
 }) => {
   const [isPhoneMode, setIsPhoneMode] = useState(true);
   const [currentTime, setCurrentTime] = useState('');
@@ -25,7 +27,7 @@ export const AndroidFrame: React.FC<AndroidFrameProps> = ({
   }, []);
 
   return (
-    <div className="min-h-screen text-[#E0E0E0] flex flex-col items-center justify-center p-0 sm:p-4 font-sans select-none overflow-x-hidden bg-[#030103] cyberpunk-grid">
+    <div className="h-[100dvh] w-full text-[#E0E0E0] flex flex-col items-center justify-center p-0 sm:p-4 font-sans select-none overflow-hidden bg-[#030103] cyberpunk-grid">
       {/* Top frame telemetry bar (visible on larger screens) */}
       <div className="w-full max-w-md hidden sm:flex items-center justify-between mb-2.5 px-2 text-xs font-mono">
         <div className="flex items-center gap-2">
@@ -59,10 +61,10 @@ export const AndroidFrame: React.FC<AndroidFrameProps> = ({
 
       {/* Main Container */}
       <div
-        className={`w-full transition-all duration-300 relative flex flex-col overflow-hidden bg-[#080205] border-[#FF1A3C]/60 shadow-[0_0_40px_rgba(255,26,60,0.25)] ${
+        className={`w-full h-full max-h-[100dvh] transition-all duration-300 relative flex flex-col overflow-hidden bg-[#080205] border-[#FF1A3C]/60 shadow-[0_0_40px_rgba(255,26,60,0.25)] ${
           isPhoneMode
-            ? 'sm:max-w-[420px] sm:h-[860px] sm:rounded-[36px] sm:border-[8px] sm:border-[#1A030A] sm:shadow-[0_25px_60px_-15px_rgba(255,26,60,0.35)] sm:ring-2 sm:ring-[#FF1A3C]/50'
-            : 'max-w-4xl h-screen sm:h-[860px] sm:rounded-2xl sm:border sm:shadow-2xl'
+            ? 'sm:max-w-[420px] sm:h-[860px] sm:max-h-[860px] sm:rounded-[36px] sm:border-[8px] sm:border-[#1A030A] sm:shadow-[0_25px_60px_-15px_rgba(255,26,60,0.35)] sm:ring-2 sm:ring-[#FF1A3C]/50'
+            : 'max-w-4xl sm:h-[860px] sm:rounded-2xl sm:border sm:shadow-2xl'
         }`}
       >
         {/* Android Top Notch & Cyberpunk Status Bar */}
@@ -82,6 +84,15 @@ export const AndroidFrame: React.FC<AndroidFrameProps> = ({
           )}
 
           <div className="flex items-center gap-2">
+            {onLockScreen && (
+              <button
+                onClick={onLockScreen}
+                title="Экран блокировки (AOD виджет)"
+                className="p-1 rounded bg-[#1C040E] border border-[#FF1A3C]/40 text-[#FF4D6D] hover:text-white hover:border-[#FF1A3C] transition-colors"
+              >
+                <Lock className="w-3 h-3" />
+              </button>
+            )}
             <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold tracking-wider border bg-[#FF1A3C]/20 text-[#FF1A3C] border-[#FF1A3C]/40">
               CYBER_DSP
             </span>
@@ -90,7 +101,7 @@ export const AndroidFrame: React.FC<AndroidFrameProps> = ({
         </div>
 
         {/* Dynamic App Content */}
-        <div className="flex-1 relative overflow-hidden flex flex-col bg-[#070104] cyberpunk-scanlines">
+        <div className="flex-1 relative overflow-hidden flex flex-col min-h-0 bg-[#070104] cyberpunk-scanlines">
           {children}
         </div>
 

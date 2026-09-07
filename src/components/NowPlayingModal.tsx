@@ -15,8 +15,10 @@ import {
   Radio,
   Cpu,
   Activity,
+  Lock,
 } from 'lucide-react';
 import { Track } from '../types/music';
+import { CyberWaveformScrubber } from './CyberWaveformScrubber';
 
 interface NowPlayingModalProps {
   isOpen: boolean;
@@ -37,6 +39,7 @@ interface NowPlayingModalProps {
   onToggleRepeat: () => void;
   onToggleFavorite: (trackId: string) => void;
   onOpenEQ: () => void;
+  onLockScreen?: () => void;
 }
 
 export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
@@ -58,6 +61,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
   onToggleRepeat,
   onToggleFavorite,
   onOpenEQ,
+  onLockScreen,
 }) => {
   const [activeTab, setActiveTab] = useState<'cover' | 'lyrics' | 'details'>('cover');
   const [isMuted, setIsMuted] = useState(false);
@@ -105,13 +109,25 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
           </span>
         </div>
 
-        <button
-          onClick={onOpenEQ}
-          className="p-2 rounded-lg bg-[#150308] border border-[#00E5FF]/50 text-[#00E5FF] hover:border-[#00E5FF] hover:shadow-[0_0_10px_rgba(0,229,255,0.4)] transition-colors"
-          title="Открыть DSP Эквалайзер"
-        >
-          <Sliders className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {onLockScreen && (
+            <button
+              onClick={onLockScreen}
+              className="p-2 rounded-lg bg-[#150308] border border-[#FF1A3C]/50 text-[#FF4D6D] hover:border-[#FF1A3C] hover:text-white transition-colors"
+              title="Экран блокировки (AOD виджет)"
+            >
+              <Lock className="w-5 h-5" />
+            </button>
+          )}
+
+          <button
+            onClick={onOpenEQ}
+            className="p-2 rounded-lg bg-[#150308] border border-[#00E5FF]/50 text-[#00E5FF] hover:border-[#00E5FF] hover:shadow-[0_0_10px_rgba(0,229,255,0.4)] transition-colors"
+            title="Открыть DSP Эквалайзер"
+          >
+            <Sliders className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Main Content Area: Cover / Lyrics / Info Switcher */}
@@ -292,21 +308,16 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
           </button>
         </div>
 
-        {/* Scrubbing Bar */}
-        <div className="space-y-1">
-          <input
-            type="range"
-            min={0}
-            max={duration || 100}
-            value={currentTime}
-            onChange={(e) => onSeek(parseFloat(e.target.value))}
-            className="w-full h-1.5 bg-[#1A030A] accent-[#FF1A3C] rounded-lg appearance-none cursor-pointer"
+        {/* Cyberpunk Audio Waveform Scrubbing Bar */}
+        <div className="pt-1">
+          <CyberWaveformScrubber
+            currentTime={currentTime}
+            duration={duration}
+            isPlaying={isPlaying}
+            onSeek={onSeek}
+            trackId={track.id}
+            trackTitle={track.title}
           />
-
-          <div className="flex items-center justify-between text-[11px] font-mono text-[#883344]">
-            <span className="text-[#FF1A3C] font-bold">{formatTime(currentTime)}</span>
-            <span className="text-[#00E5FF]">{formatTime(duration)}</span>
-          </div>
         </div>
 
         {/* Playback Controls (Shuffle, Prev, Play/Pause, Next, Loop) */}

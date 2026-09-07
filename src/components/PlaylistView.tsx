@@ -62,7 +62,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden p-3 space-y-3 font-mono">
+    <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 p-3 space-y-3 font-mono">
       {/* Detail View of a Selected Playlist */}
       {selectedPlaylist ? (
         <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-200">

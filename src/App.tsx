@@ -35,10 +35,12 @@ import { NowPlayingModal } from './components/NowPlayingModal';
 import { PlaylistView } from './components/PlaylistView';
 import { DownloadsScanner } from './components/DownloadsScanner';
 import { EqualizerView } from './components/EqualizerView';
+import { CyberLockscreen } from './components/CyberLockscreen';
 
 export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<TabType>('tracks');
+  const [isLockscreenOpen, setIsLockscreenOpen] = useState<boolean>(false);
 
   // Media Data State (starts 100% clean without demo tracks)
   const [tracks, setTracks] = useState<Track[]>(() => {
@@ -256,6 +258,59 @@ export default function App() {
       prev.map((t) => (t.id === trackId ? { ...t, isFavorite: !t.isFavorite } : t))
     );
   };
+
+  // Real Android Smartphone OS Lockscreen Media Notification (MediaSession API)
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        album: currentTrack.album || 'Cyberpunk Audio',
+        artwork: [
+          {
+            src: currentTrack.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=512&auto=format&fit=crop&q=80',
+            sizes: '512x512',
+            type: 'image/jpeg',
+          },
+        ],
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => {
+        handleTogglePlayPause();
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        handleTogglePlayPause();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        handleNextTrack();
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        handlePrevTrack();
+      });
+      try {
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (details.seekTime !== undefined) {
+            handleSeek(details.seekTime);
+          }
+        });
+      } catch {}
+    }
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+      if ('setPositionState' in navigator.mediaSession && duration > 0) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: Math.max(duration, 0),
+            playbackRate: 1,
+            position: Math.min(Math.max(currentTime, 0), duration),
+          });
+        } catch {}
+      }
+    }
+  }, [isPlaying, currentTime, duration]);
 
   // Playlists Management
   const handleCreatePlaylist = (name: string, description: string) => {
@@ -489,6 +544,7 @@ export default function App() {
     <AndroidFrame
       activeTrackFormat={currentTrack ? `${currentTrack.hiResInfo.format}` : undefined}
       isLossless={currentTrack?.hiResInfo.isLossless}
+      onLockScreen={() => setIsLockscreenOpen(true)}
     >
       {/* App Cyberpunk Header */}
       <header className="px-4 py-2.5 backdrop-blur-md border-b flex items-center justify-between z-10 shrink-0 bg-[#120308]/95 border-[#FF1A3C]/50 text-[#FF1A3C]">
@@ -520,10 +576,10 @@ export default function App() {
       </header>
 
       {/* Main Screen Content Router based on Active Tab */}
-      <main className="flex-1 overflow-hidden flex flex-col relative">
+      <main className="flex-1 overflow-hidden flex flex-col min-h-0 relative">
         {/* Tab 1: All Tracks (Треки) */}
         {activeTab === 'tracks' && (
-          <div className="flex-1 flex flex-col overflow-hidden p-3 space-y-3 font-mono">
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0 p-3 space-y-3 font-mono">
             <div className="flex items-center justify-between pb-2 border-b border-[#FF1A3C]/30 shrink-0">
               <div>
                 <h2 className="text-xs font-black text-[#FFFFFF] flex items-center gap-1.5 tracking-wider">
@@ -786,17 +842,27 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Mini Player */}
-      <MiniPlayer
-        track={currentTrack}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        onPlayPause={handleTogglePlayPause}
-        onNext={handleNextTrack}
-        onOpenNowPlaying={() => setIsNowPlayingOpen(true)}
-        onToggleFavorite={handleToggleFavorite}
-      />
+      {/* Fixed Sticky Bottom Dock: Mini Player & Tab Navigation */}
+      <div className="shrink-0 z-20 flex flex-col bg-[#0A0206]/98 border-t border-[#FF1A3C]/40 shadow-[0_-8px_25px_rgba(0,0,0,0.9)]">
+        <MiniPlayer
+          track={currentTrack}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          onPlayPause={handleTogglePlayPause}
+          onNext={handleNextTrack}
+          onOpenNowPlaying={() => setIsNowPlayingOpen(true)}
+          onToggleFavorite={handleToggleFavorite}
+          onSeek={handleSeek}
+        />
+
+        <Navigation
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          tracksCount={tracks.length}
+          playlistsCount={playlists.length}
+        />
+      </div>
 
       {/* Full Screen Now Playing Screen Modal */}
       <NowPlayingModal
@@ -821,14 +887,29 @@ export default function App() {
           setIsNowPlayingOpen(false);
           setActiveTab('equalizer');
         }}
+        onLockScreen={() => {
+          setIsNowPlayingOpen(false);
+          setIsLockscreenOpen(true);
+        }}
       />
 
-      {/* Android Bottom Navigation Bar */}
-      <Navigation
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        tracksCount={tracks.length}
-        playlistsCount={playlists.length}
+      {/* Cyberpunk Smartphone Lock Screen Widget */}
+      <CyberLockscreen
+        isOpen={isLockscreenOpen}
+        onUnlock={() => setIsLockscreenOpen(false)}
+        track={currentTrack}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        duration={duration}
+        onPlayPause={handleTogglePlayPause}
+        onNext={handleNextTrack}
+        onPrev={handlePrevTrack}
+        onSeek={handleSeek}
+        onToggleFavorite={handleToggleFavorite}
+        onOpenNowPlaying={() => {
+          setIsLockscreenOpen(false);
+          setIsNowPlayingOpen(true);
+        }}
       />
     </AndroidFrame>
   );

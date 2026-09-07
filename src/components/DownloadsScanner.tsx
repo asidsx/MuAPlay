@@ -89,7 +89,7 @@ export const DownloadsScanner: React.FC<DownloadsScannerProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden p-3 space-y-3 font-mono">
+    <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 p-3 space-y-3 font-mono">
       {/* Header & Path Banner */}
       <div className="bg-[#120308] border border-[#FF1A3C]/50 rounded-xl p-3 space-y-2.5 shrink-0 shadow-[0_0_15px_rgba(255,26,60,0.2)]">
         <div className="flex items-center justify-between">
