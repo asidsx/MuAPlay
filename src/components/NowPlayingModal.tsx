@@ -446,23 +446,6 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
           </button>
         </div>
 
-        {/* Volume Bar */}
-        <div className="flex items-center gap-3 pt-2">
-          <button onClick={handleVolumeToggle} className="text-[#882233] hover:text-[#FF1A3C]">
-            {volume === 0 || isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={volume}
-            onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-            className="w-full h-1 bg-[#1A030A] accent-[#00E5FF] rounded-lg cursor-pointer"
-          />
-        </div>
-
         {/* Touch Lock Protective HUD Overlay */}
         {isTouchLocked && (
           <div className="absolute inset-0 -top-2 bg-[#080205]/92 backdrop-blur-md rounded-2xl border-2 border-[#FF1A3C] z-30 flex flex-col items-center justify-center p-4 text-center space-y-3 shadow-[0_0_30px_rgba(255,26,60,0.5)] animate-in fade-in duration-200">
