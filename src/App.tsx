@@ -51,8 +51,20 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Clean out legacy demo track IDs if present
-        return parsed.filter((t: Track) => !t.id.startsWith('track-') || t.id.startsWith('track-upload-') || t.id.length > 15);
+        // Clean out legacy demo track IDs if present and purge mismatched lyrics
+        return parsed
+          .filter((t: Track) => !t.id.startsWith('track-') || t.id.startsWith('track-upload-') || t.id.length > 15)
+          .map((t: Track) => {
+            // Auto-clean known false mismatch (e.g. Zach Bryan's "Burn, Burn, Burn" attached to EDM beat "burn")
+            if (
+              t.lyrics &&
+              t.lyrics.includes('Everyone seems a damn genius lately') &&
+              !t.artist.toLowerCase().includes('zach bryan')
+            ) {
+              return { ...t, lyrics: undefined };
+            }
+            return t;
+          });
       } catch {
         return [];
       }

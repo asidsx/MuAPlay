@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   X,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { Track } from '../types/music';
 import {
@@ -23,6 +24,7 @@ import {
   LyricSearchResult,
   cleanTitle,
   cleanArtist,
+  clearLyricsCache,
 } from '../services/lyricsService';
 
 interface CyberLyricsViewProps {
@@ -88,9 +90,13 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
     }
   }, [track.id]);
 
-  const handleAutoFetch = async () => {
+  const handleAutoFetch = async (forcePurgeCache = false) => {
     setIsAutoFetching(true);
-    setFetchStatusMessage('Поиск лирики в сети (LRCLIB)...');
+    setFetchStatusMessage('Проверка базы лирики (LRCLIB)...');
+
+    if (forcePurgeCache) {
+      clearLyricsCache(track.title, track.artist);
+    }
 
     try {
       const res = await fetchLyricsOnline({
@@ -104,7 +110,8 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
         onUpdateLyrics(track.id, res.lyrics);
         setFetchStatusMessage(res.isSynced ? '✓ Синхронная лирика (LRC) загружена' : '✓ Текст песни загружен');
       } else {
-        setFetchStatusMessage('Лирика не найдена в онлайн-базе');
+        // If force refresh couldn't find a matching lyrics and user had a mismatch, notify clearly
+        setFetchStatusMessage('Точная лирика для этого исполнителя не найдена');
       }
     } catch (err) {
       setFetchStatusMessage('Ошибка сети при запросе лирики');
@@ -112,6 +119,13 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
       setIsAutoFetching(false);
       setTimeout(() => setFetchStatusMessage(null), 4000);
     }
+  };
+
+  const handleDeleteLyrics = () => {
+    clearLyricsCache(track.title, track.artist);
+    onUpdateLyrics(track.id, '');
+    setFetchStatusMessage('Лирика отвязана от трека');
+    setTimeout(() => setFetchStatusMessage(null), 3000);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -232,10 +246,10 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
 
           {/* Re-fetch online button */}
           <button
-            onClick={handleAutoFetch}
+            onClick={() => handleAutoFetch(true)}
             disabled={isAutoFetching}
             className="p-1 rounded bg-[#1A040D] hover:bg-[#250514] text-[#00E5FF] border border-[#00E5FF]/40 transition-colors"
-            title="Автоподкачка с LRCLIB"
+            title="Обновить и проверить совпадение в LRCLIB"
           >
             <RefreshCw className={`w-3 h-3 ${isAutoFetching ? 'animate-spin' : ''}`} />
           </button>
@@ -264,6 +278,17 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
             onChange={handleFileSelect}
             className="hidden"
           />
+
+          {/* Delete / Unlink lyrics if present */}
+          {track.lyrics && (
+            <button
+              onClick={handleDeleteLyrics}
+              className="p-1 rounded bg-[#1A040D] hover:bg-[#250514] text-[#FF1A3C] hover:text-[#FF4D6D] border border-[#FF1A3C]/40 transition-colors"
+              title="Отвязать/удалить лирику у этого трека"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
 
           {/* Copy lyrics */}
           {track.lyrics && (

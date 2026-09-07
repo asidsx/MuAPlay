@@ -29,10 +29,48 @@ export interface FetchLyricsResult {
   lyrics: string;
   isSynced: boolean;
   source: string;
+  artistName?: string;
+  trackName?: string;
+  matchScore?: number;
 }
 
 const LRCLIB_BASE_URL = 'https://lrclib.net/api';
-const CACHE_PREFIX = 'muaplay_lrc_cache_';
+const CACHE_PREFIX = 'muaplay_lrc_v3_cache_';
+
+// Purge any legacy unverified cache entries on module load to clear old bad matches
+try {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('muaplay_lrc_cache_') || key.startsWith('muaplay_lrc_v2_cache_'))) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((k) => localStorage.removeItem(k));
+} catch {}
+
+/**
+ * Split multi-artist strings into individual artist names
+ * e.g. "bulletrain/skyfall beats // burn" -> ["bulletrain", "skyfall beats", "bulletrain/skyfall beats"]
+ */
+export function splitArtistVariants(rawArtist: string): string[] {
+  if (!rawArtist) return [];
+  const cleaned = rawArtist
+    .replace(/\s*\/\/\s*.*$/, '') // remove trailing "// title" suffixes
+    .trim();
+
+  const variants = new Set<string>();
+  if (cleaned) variants.add(cleaned.toLowerCase());
+
+  // Split by common separators: /, &, feat, ft., +, vs, x, comma
+  const parts = cleaned
+    .split(/\s*(?:\/|&|feat\.?|ft\.?|\+|\bvs\.?\b|\bx\b|,)\s*/i)
+    .map((p) => p.replace(/[()\[\]]/g, '').trim().toLowerCase())
+    .filter((p) => p.length >= 2 && !['unknown', 'various', 'artist', 'prod', 'remix'].includes(p));
+
+  parts.forEach((p) => variants.add(p));
+  return Array.from(variants);
+}
 
 /**
  * Clean track title by removing track numbers, extensions, and audio/video tags
@@ -49,7 +87,7 @@ export function cleanTitle(rawTitle: string): string {
 
   // Remove common video/audio suffixes and metadata brackets
   cleaned = cleaned.replace(
-    /\s*(\(|\[)(official\s*(music\s*)?video|video|audio|lyrics?|visualizer|remastered(\s*\d{4})?|deluxe|bonus\s*track|hd|4k|hq|radio\s*edit|extended\s*mix)(\)|\])/gi,
+    /\s*(\(|\[)(official\s*(music\s*)?video|video|audio|lyrics?|visualizer|remastered(\s*\d{4})?|deluxe|bonus\s*track|hd|4k|hq|radio\s*edit|extended\s*mix|prod\.?\s*by\s*[^)\]]+)(\)|\])/gi,
     ''
   );
 
@@ -69,11 +107,132 @@ export function cleanArtist(rawArtist: string): string {
   if (!rawArtist) return '';
   let cleaned = rawArtist;
 
+  // Remove trailing // title suffix
+  cleaned = cleaned.replace(/\s*\/\/\s*.*$/, '');
+
   // Replace common multi-artist joins
-  cleaned = cleaned.replace(/\s*(\/|&|feat\.?|ft\.?|,)\s+.*$/i, '');
+  cleaned = cleaned.replace(/\s*(?:\/|&|feat\.?|ft\.?|,)\s+.*$/i, '');
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
   return cleaned || rawArtist;
+}
+
+/**
+ * Strict Multi-Factor Anti-Mismatch Scorer
+ * Prevents attaching lyrics from different artists (e.g. Zach Bryan for bulletrain's "burn")
+ */
+export function calculateMatchScore(
+  target: { title: string; artist?: string; duration?: number },
+  candidate: LyricSearchResult
+): { score: number; isAcceptable: boolean; reason: string } {
+  if (candidate.instrumental && !candidate.syncedLyrics && !candidate.plainLyrics) {
+    return { score: 0, isAcceptable: false, reason: 'Инструментальный трек без лирики' };
+  }
+
+  const targetTitleNorm = cleanTitle(target.title).toLowerCase().trim();
+  const candidateTitleNorm = cleanTitle(candidate.trackName || '').toLowerCase().trim();
+
+  const targetArtist = target.artist?.trim() || '';
+  const isGenericArtist =
+    !targetArtist ||
+    /^(unknown|unknown artist|неизвестный|неизвестный исполнитель)$/i.test(targetArtist);
+
+  const candidateArtistNorm = (candidate.artistName || '').toLowerCase().trim();
+  const artistVariants = splitArtistVariants(targetArtist);
+
+  // 1. ARTIST VALIDATION (Crucial: prevents completely unrelated songs from matching)
+  let artistScore = 0;
+  if (!isGenericArtist && artistVariants.length > 0) {
+    let bestArtistMatch = 0;
+    for (const v of artistVariants) {
+      if (candidateArtistNorm === v) {
+        bestArtistMatch = Math.max(bestArtistMatch, 45); // Exact artist match
+      } else if (candidateArtistNorm.includes(v) || v.includes(candidateArtistNorm)) {
+        bestArtistMatch = Math.max(bestArtistMatch, 38); // Substring match
+      } else {
+        // Token overlap check
+        const candTokens = candidateArtistNorm.split(/\s+/).filter((w) => w.length >= 3);
+        const varTokens = v.split(/\s+/).filter((w) => w.length >= 3);
+        const hasCommonToken = candTokens.some((ct) => varTokens.includes(ct));
+        if (hasCommonToken) {
+          bestArtistMatch = Math.max(bestArtistMatch, 30);
+        }
+      }
+    }
+
+    if (bestArtistMatch === 0) {
+      // Hard rejection: target artist is known, but candidate artist is completely different!
+      return {
+        score: 0,
+        isAcceptable: false,
+        reason: `Несовпадение исполнителя: "${candidate.artistName}" ≠ "${target.artist}"`,
+      };
+    }
+    artistScore = bestArtistMatch;
+  } else {
+    // If target artist was unknown, give neutral artist score
+    artistScore = 20;
+  }
+
+  // 2. TITLE VALIDATION
+  let titleScore = 0;
+  if (targetTitleNorm === candidateTitleNorm) {
+    titleScore = 45; // Exact title match
+  } else if (
+    candidateTitleNorm.startsWith(targetTitleNorm) ||
+    targetTitleNorm.startsWith(candidateTitleNorm)
+  ) {
+    titleScore = 35;
+  } else if (candidateTitleNorm.includes(targetTitleNorm)) {
+    // Penalize if candidate title has many extra words compared to a 1-word target
+    const targetWords = targetTitleNorm.split(/\s+/).filter(Boolean);
+    const candWords = candidateTitleNorm.split(/\s+/).filter(Boolean);
+    if (targetWords.length === 1 && candWords.length > 2) {
+      // e.g. "burn" vs "Burn, Burn, Burn" or "Burn It Down"
+      titleScore = 20;
+    } else {
+      titleScore = 30;
+    }
+  } else {
+    return {
+      score: 0,
+      isAcceptable: false,
+      reason: `Несовпадение названия: "${candidate.trackName}" ≠ "${target.title}"`,
+    };
+  }
+
+  // 3. DURATION VALIDATION (if both durations are available)
+  let durationScore = 0;
+  if (target.duration && target.duration > 15 && candidate.duration && candidate.duration > 15) {
+    const diff = Math.abs(target.duration - candidate.duration);
+    if (diff <= 3) {
+      durationScore = 10;
+    } else if (diff <= 8) {
+      durationScore = 7;
+    } else if (diff <= 15) {
+      durationScore = 3;
+    } else if (diff > 25) {
+      // High duration mismatch
+      durationScore = -20;
+    }
+  }
+
+  const totalScore = Math.max(0, artistScore + titleScore + durationScore);
+
+  // Strict acceptance criteria:
+  // Must have matched title and (if artist is known) matched artist
+  const isAcceptable =
+    totalScore >= 60 &&
+    titleScore >= 30 &&
+    (isGenericArtist ? durationScore >= 3 : artistScore >= 30);
+
+  return {
+    score: totalScore,
+    isAcceptable,
+    reason: isAcceptable
+      ? `Надежное совпадение (${totalScore}%)`
+      : `Низкая уверенность (${totalScore}%): возможно, трек другой версии`,
+  };
 }
 
 /**
@@ -199,7 +358,19 @@ function getCacheKey(artist: string, title: string): string {
 }
 
 /**
- * Fetch lyrics from LRCLIB API with multi-stage fallback
+ * Clear cached lyrics for a track
+ */
+export function clearLyricsCache(title: string, artist?: string) {
+  const cleanT = cleanTitle(title);
+  const cleanA = cleanArtist(artist || '');
+  const cacheKey = getCacheKey(cleanA, cleanT);
+  try {
+    localStorage.removeItem(cacheKey);
+  } catch {}
+}
+
+/**
+ * Fetch lyrics from LRCLIB API with strict multi-factor anti-mismatch verification
  */
 export async function fetchLyricsOnline(params: {
   title: string;
@@ -213,6 +384,7 @@ export async function fetchLyricsOnline(params: {
 
   const cleanT = cleanTitle(title);
   const cleanA = cleanArtist(artist);
+  const artistVariants = splitArtistVariants(artist);
 
   // Check cache
   const cacheKey = getCacheKey(cleanA, cleanT);
@@ -221,10 +393,31 @@ export async function fetchLyricsOnline(params: {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed?.lyrics) {
-        return parsed;
+        // Double check cache validity: if artist was specified, check it didn't cache a mismatched artist
+        if (cleanA && parsed.artistName) {
+          const matchCheck = calculateMatchScore(
+            { title: cleanT, artist: cleanA, duration },
+            {
+              id: 0,
+              trackName: parsed.trackName || cleanT,
+              artistName: parsed.artistName,
+              duration: duration,
+            }
+          );
+          if (matchCheck.isAcceptable) {
+            return parsed;
+          } else {
+            // Bad legacy cache! Remove it
+            localStorage.removeItem(cacheKey);
+          }
+        } else {
+          return parsed;
+        }
       }
     }
   } catch {}
+
+  const candidates: LyricSearchResult[] = [];
 
   // 1. Try exact match using /api/get
   try {
@@ -239,96 +432,99 @@ export async function fetchLyricsOnline(params: {
     });
 
     if (res.ok) {
-      const data = await res.json();
-      if (data.syncedLyrics) {
-        const result: FetchLyricsResult = {
-          lyrics: data.syncedLyrics,
-          isSynced: true,
-          source: 'LRCLIB (Синхронизированные LRC)',
-        };
-        saveToCache(cacheKey, result);
-        return result;
-      } else if (data.plainLyrics) {
-        const result: FetchLyricsResult = {
-          lyrics: data.plainLyrics,
-          isSynced: false,
-          source: 'LRCLIB (Текст)',
-        };
-        saveToCache(cacheKey, result);
-        return result;
+      const data: LyricSearchResult = await res.json();
+      if (data && (data.syncedLyrics || data.plainLyrics)) {
+        const match = calculateMatchScore({ title: cleanT, artist: cleanA, duration }, data);
+        if (match.isAcceptable) {
+          const result: FetchLyricsResult = {
+            lyrics: data.syncedLyrics || data.plainLyrics!,
+            isSynced: Boolean(data.syncedLyrics),
+            source: `LRCLIB: ${data.artistName} - ${data.trackName}`,
+            artistName: data.artistName,
+            trackName: data.trackName,
+            matchScore: match.score,
+          };
+          saveToCache(cacheKey, result);
+          return result;
+        }
       }
     }
   } catch (err) {
     console.warn('LRCLIB exact get attempt failed:', err);
   }
 
-  // 2. Try search using /api/search with combined query
-  try {
-    const searchQuery = cleanA ? `${cleanA} ${cleanT}` : cleanT;
-    const searchUrl = `${LRCLIB_BASE_URL}/search?q=${encodeURIComponent(searchQuery)}`;
-
-    const res = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'MuAPlay-CyberAudio/1.0' },
-    });
-
-    if (res.ok) {
-      const items: LyricSearchResult[] = await res.json();
-      if (Array.isArray(items) && items.length > 0) {
-        // Prioritize items with syncedLyrics
-        const syncedItem = items.find((it) => !!it.syncedLyrics);
-        if (syncedItem && syncedItem.syncedLyrics) {
-          const result: FetchLyricsResult = {
-            lyrics: syncedItem.syncedLyrics,
-            isSynced: true,
-            source: `LRCLIB: ${syncedItem.artistName} - ${syncedItem.trackName}`,
-          };
-          saveToCache(cacheKey, result);
-          return result;
-        }
-
-        // Fallback to plain lyrics
-        const plainItem = items.find((it) => !!it.plainLyrics);
-        if (plainItem && plainItem.plainLyrics) {
-          const result: FetchLyricsResult = {
-            lyrics: plainItem.plainLyrics,
-            isSynced: false,
-            source: `LRCLIB: ${plainItem.artistName} - ${plainItem.trackName}`,
-          };
-          saveToCache(cacheKey, result);
-          return result;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('LRCLIB search attempt failed:', err);
-  }
-
-  // 3. Last attempt: Search by title alone if artist had unusual prefixes
-  if (cleanA) {
+  // Helper to query and collect candidates
+  const executeSearch = async (query: string) => {
     try {
-      const searchUrl = `${LRCLIB_BASE_URL}/search?q=${encodeURIComponent(cleanT)}`;
-      const res = await fetch(searchUrl, {
+      const res = await fetch(`${LRCLIB_BASE_URL}/search?q=${encodeURIComponent(query)}`, {
         headers: { 'User-Agent': 'MuAPlay-CyberAudio/1.0' },
       });
-
       if (res.ok) {
         const items: LyricSearchResult[] = await res.json();
-        if (Array.isArray(items) && items.length > 0) {
-          const syncedItem = items.find((it) => !!it.syncedLyrics);
-          if (syncedItem?.syncedLyrics) {
-            const result: FetchLyricsResult = {
-              lyrics: syncedItem.syncedLyrics,
-              isSynced: true,
-              source: `LRCLIB: ${syncedItem.artistName} - ${syncedItem.trackName}`,
-            };
-            saveToCache(cacheKey, result);
-            return result;
+        if (Array.isArray(items)) {
+          for (const it of items) {
+            if (!candidates.some((c) => c.id === it.id)) {
+              candidates.push(it);
+            }
           }
         }
       }
     } catch {}
+  };
+
+  // 2. Try primary search: clean artist + clean title
+  const primaryQuery = cleanA ? `${cleanA} ${cleanT}` : cleanT;
+  await executeSearch(primaryQuery);
+
+  // 3. If no acceptable candidate yet and there are alternative artist variants, try each
+  if (artistVariants.length > 1) {
+    for (const variant of artistVariants) {
+      if (variant !== cleanA.toLowerCase()) {
+        await executeSearch(`${variant} ${cleanT}`);
+      }
+    }
   }
 
+  // 4. Evaluate and rank all candidate results
+  interface ScoredCandidate {
+    item: LyricSearchResult;
+    score: number;
+    hasSynced: boolean;
+  }
+
+  const scoredCandidates: ScoredCandidate[] = [];
+
+  for (const item of candidates) {
+    if (!item.syncedLyrics && !item.plainLyrics) continue;
+    const match = calculateMatchScore({ title: cleanT, artist: cleanA, duration }, item);
+    if (match.isAcceptable) {
+      scoredCandidates.push({
+        item,
+        score: match.score + (item.syncedLyrics ? 10 : 0), // Slight bonus for synchronized lyrics
+        hasSynced: Boolean(item.syncedLyrics),
+      });
+    }
+  }
+
+  if (scoredCandidates.length > 0) {
+    // Pick the highest scoring verified candidate
+    scoredCandidates.sort((a, b) => b.score - a.score);
+    const best = scoredCandidates[0];
+
+    const result: FetchLyricsResult = {
+      lyrics: best.item.syncedLyrics || best.item.plainLyrics!,
+      isSynced: best.hasSynced,
+      source: `LRCLIB: ${best.item.artistName} - ${best.item.trackName}`,
+      artistName: best.item.artistName,
+      trackName: best.item.trackName,
+      matchScore: best.score,
+    };
+    saveToCache(cacheKey, result);
+    return result;
+  }
+
+  // 5. DO NOT fallback to blind title search when artist is known!
+  // It is vastly better to report "Лирика не найдена" than to show completely wrong lyrics.
   return null;
 }
 
