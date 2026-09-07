@@ -198,6 +198,59 @@ class AudioEngine {
     return dataArray;
   }
 
+  public getAudioContext(): AudioContext | null {
+    return this.ctx;
+  }
+
+  public getTimeDomainData(): Uint8Array | null {
+    if (!this.analyserNode) return null;
+    const bufferLength = this.analyserNode.fftSize;
+    const dataArray = new Uint8Array(bufferLength);
+    this.analyserNode.getByteTimeDomainData(dataArray);
+    return dataArray;
+  }
+
+  public getLiveTelemetry() {
+    const sampleRate = this.ctx ? this.ctx.sampleRate : 48000;
+    const state = this.ctx ? this.ctx.state : 'running';
+    const baseLatencyMs = this.ctx && this.ctx.baseLatency ? +(this.ctx.baseLatency * 1000).toFixed(1) : 10.5;
+    
+    // Calculate RMS & Peak dB from Time Domain
+    let peakDb = -96;
+    let rmsDb = -96;
+    let peakPercent = 0;
+
+    if (this.analyserNode) {
+      const data = this.getTimeDomainData();
+      if (data && data.length > 0) {
+        let sumSquares = 0;
+        let maxDev = 0;
+        for (let i = 0; i < data.length; i++) {
+          const val = (data[i] - 128) / 128; // -1.0 to 1.0
+          const absVal = Math.abs(val);
+          if (absVal > maxDev) maxDev = absVal;
+          sumSquares += val * val;
+        }
+        const rms = Math.sqrt(sumSquares / data.length);
+        peakPercent = Math.min(100, Math.round(maxDev * 100));
+        peakDb = maxDev > 0.0001 ? +(20 * Math.log10(maxDev)).toFixed(1) : -96;
+        rmsDb = rms > 0.0001 ? +(20 * Math.log10(rms)).toFixed(1) : -96;
+      }
+    }
+
+    const eqActive = this.eqFilters.some((f) => Math.abs(f.gain.value) > 0.1);
+
+    return {
+      sampleRate,
+      state,
+      baseLatencyMs,
+      peakDb,
+      rmsDb,
+      peakPercent,
+      eqActive,
+    };
+  }
+
   public getAudioElement() {
     return this.audioElement;
   }

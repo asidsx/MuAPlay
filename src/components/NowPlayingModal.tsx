@@ -16,11 +16,14 @@ import {
   Cpu,
   Activity,
   Lock,
+  Unlock,
 } from 'lucide-react';
 import { Track } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
 import { CyberLyricsView } from './CyberLyricsView';
 import { CyberCoverImage } from './CyberCoverImage';
+import { CyberTelemetryView } from './CyberTelemetryView';
+import { CyberReactiveRing } from './CyberReactiveRing';
 
 interface NowPlayingModalProps {
   isOpen: boolean;
@@ -69,6 +72,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'cover' | 'lyrics' | 'details'>('cover');
   const [isMuted, setIsMuted] = useState(false);
+  const [isTouchLocked, setIsTouchLocked] = useState(false);
 
   if (!isOpen || !track) return null;
 
@@ -114,15 +118,22 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {onLockScreen && (
-            <button
-              onClick={onLockScreen}
-              className="p-2 rounded-lg bg-[#150308] border border-[#FF1A3C]/50 text-[#FF4D6D] hover:border-[#FF1A3C] hover:text-white transition-colors"
-              title="Экран блокировки (AOD виджет)"
-            >
-              <Lock className="w-5 h-5" />
-            </button>
-          )}
+          {/* Touch Lock Toggle */}
+          <button
+            onClick={() => setIsTouchLocked(!isTouchLocked)}
+            className={`p-2 rounded-lg border transition-all ${
+              isTouchLocked
+                ? 'bg-[#FF1A3C] text-black border-[#FF1A3C] shadow-[0_0_15px_rgba(255,26,60,0.8)]'
+                : 'bg-[#150308] border-[#FF1A3C]/50 text-[#FF4D6D] hover:border-[#FF1A3C] hover:text-white'
+            }`}
+            title={
+              isTouchLocked
+                ? 'Управление заблокировано (нажмите для разблокировки)'
+                : 'Заблокировать управление (защита от нажатий в кармане)'
+            }
+          >
+            {isTouchLocked ? <Lock className="w-5 h-5 fill-black" /> : <Lock className="w-5 h-5" />}
+          </button>
 
           <button
             onClick={onOpenEQ}
@@ -172,48 +183,32 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
           </button>
         </div>
 
-        {/* Tab 1: Spinning Holographic Cyber Album Cover */}
+        {/* Tab 1: Spinning Reactive Holographic Equalizer Ring & Cyber Album Cover */}
         {activeTab === 'cover' && (
-          <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center my-auto">
-            {/* Background Holographic Glow & Rotating Cyber Ring */}
-            <div
-              className={`absolute inset-0 rounded-full border-2 border-dashed border-[#FF1A3C]/40 transition-all duration-1000 ${
-                isPlaying ? 'animate-spin opacity-100 scale-105' : 'opacity-30 scale-95'
-              }`}
-              style={{ animationDuration: '15s' }}
-            />
-            <div
-              className={`absolute inset-2 rounded-full border border-[#00E5FF]/40 transition-all duration-1000 ${
-                isPlaying ? 'opacity-80 scale-100' : 'opacity-20'
-              }`}
-            />
-            <div
-              className={`absolute inset-0 rounded-full bg-[#FF1A3C]/15 blur-3xl transition-opacity duration-1000 ${
-                isPlaying ? 'opacity-100' : 'opacity-20'
-              }`}
-            />
-
-            {/* Album Card inside Cyberpunk Frame */}
-            <div
-              className={`relative w-56 h-56 sm:w-64 sm:h-64 rounded-2xl overflow-hidden shadow-2xl border-2 border-[#FF1A3C]/80 transition-transform duration-700 ${
-                isPlaying ? 'scale-100 shadow-[0_0_25px_rgba(255,26,60,0.4)]' : 'scale-95'
-              }`}
-            >
-              <CyberCoverImage
-                src={track.coverUrl}
-                alt={track.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0A0206]/80 via-transparent to-transparent" />
-              
-              {/* Corner HUD brackets */}
-              <div className="absolute top-2 left-2 text-[9px] font-mono font-bold text-[#FF1A3C] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#FF1A3C]/40">
-                [ 24-BIT / 192k ]
+          <div className="relative flex items-center justify-center my-auto">
+            <CyberReactiveRing isPlaying={isPlaying} size={300}>
+              {/* Album Card inside Cyberpunk Frame */}
+              <div
+                className={`relative w-52 h-52 sm:w-56 sm:h-56 rounded-2xl overflow-hidden shadow-2xl border-2 border-[#FF1A3C]/80 transition-transform duration-500 ${
+                  isPlaying ? 'scale-100 shadow-[0_0_30px_rgba(255,26,60,0.45)]' : 'scale-95'
+                }`}
+              >
+                <CyberCoverImage
+                  src={track.coverUrl}
+                  alt={track.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0206]/80 via-transparent to-transparent" />
+                
+                {/* Corner HUD brackets */}
+                <div className="absolute top-2 left-2 text-[9px] font-mono font-bold text-[#FF1A3C] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#FF1A3C]/40">
+                  [ {track.hiResInfo?.format || 'AUDIO'} // {track.hiResInfo?.sampleRate ? `${track.hiResInfo.sampleRate / 1000}k` : '44.1k'} ]
+                </div>
+                <div className="absolute bottom-2 right-2 text-[9px] font-mono font-bold text-[#00E5FF] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#00E5FF]/40">
+                  {track.hiResInfo?.isLossless ? 'LOSSLESS' : 'HI-RES'}
+                </div>
               </div>
-              <div className="absolute bottom-2 right-2 text-[9px] font-mono font-bold text-[#00E5FF] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#00E5FF]/40">
-                LOSSLESS
-              </div>
-            </div>
+            </CyberReactiveRing>
           </div>
         )}
 
@@ -231,52 +226,17 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
 
         {/* Tab 3: Detailed Hi-Res Audio Format Telemetry */}
         {activeTab === 'details' && (
-          <div className="w-full max-w-md bg-[#120308]/95 border border-[#FF1A3C]/50 rounded-2xl p-4 space-y-2.5 text-xs text-[#E0E0E0] my-auto font-mono shadow-[0_0_20px_rgba(255,26,60,0.2)]">
-            <div className="flex items-center justify-between pb-2 border-b border-[#FF1A3C]/30">
-              <span className="font-bold text-[#FFFFFF] flex items-center gap-1.5">
-                <Cpu className="w-4 h-4 text-[#00E5FF]" />
-                <span>CYBER_DSP // ТЕЛЕМЕТРИЯ</span>
-              </span>
-              <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40">
-                [ {track.hiResInfo.format} ]
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-              <div className="bg-[#0A0206] p-2 rounded-lg border border-[#FF1A3C]/30">
-                <span className="text-[#883344] block text-[9px] uppercase">КОДЕК</span>
-                <span className="font-bold text-[#00E5FF]">{track.hiResInfo.format}</span>
-              </div>
-              <div className="bg-[#0A0206] p-2 rounded-lg border border-[#FF1A3C]/30">
-                <span className="text-[#883344] block text-[9px] uppercase">РАЗРЯДНОСТЬ</span>
-                <span className="font-bold text-[#FF1A3C]">
-                  {track.hiResInfo.bitDepth ? `${track.hiResInfo.bitDepth}-BIT LOSSLESS` : '16-BIT PCM'}
-                </span>
-              </div>
-              <div className="bg-[#0A0206] p-2 rounded-lg border border-[#FF1A3C]/30">
-                <span className="text-[#883344] block text-[9px] uppercase">ЧАСТОТА</span>
-                <span className="font-bold text-[#00E5FF]">
-                  {track.hiResInfo.sampleRate ? `${track.hiResInfo.sampleRate / 1000} kHz` : '44.1 kHz'}
-                </span>
-              </div>
-              <div className="bg-[#0A0206] p-2 rounded-lg border border-[#FF1A3C]/30">
-                <span className="text-[#883344] block text-[9px] uppercase">БИТРЕЙТ</span>
-                <span className="font-bold text-[#FF1A3C]">
-                  {track.hiResInfo.bitrateKbps ? `${track.hiResInfo.bitrateKbps} kbps` : '1411 kbps'}
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-[#0A0206] p-2 rounded-lg border border-[#FF1A3C]/30 text-[10px] break-all text-[#884455] mt-2">
-              <span className="text-[#883344] block uppercase text-[9px]">ПУТЬ В ПАМЯТИ:</span>
-              <span className="text-[#E0E0E0]">{track.filePath || '/storage/emulated/0/Download/'}</span>
-            </div>
-          </div>
+          <CyberTelemetryView
+            track={track}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+          />
         )}
       </div>
 
       {/* Bottom Track Controls & Progress */}
-      <div className="w-full max-w-md mx-auto space-y-4 shrink-0 z-10 font-mono">
+      <div className="w-full max-w-md mx-auto space-y-4 shrink-0 z-10 font-mono relative">
         {/* Track Title & Favorite */}
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1 pr-4">
@@ -385,6 +345,27 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
             className="w-full h-1 bg-[#1A030A] accent-[#00E5FF] rounded-lg cursor-pointer"
           />
         </div>
+
+        {/* Touch Lock Protective HUD Overlay */}
+        {isTouchLocked && (
+          <div className="absolute inset-0 -top-2 bg-[#080205]/92 backdrop-blur-md rounded-2xl border-2 border-[#FF1A3C] z-30 flex flex-col items-center justify-center p-4 text-center space-y-3 shadow-[0_0_30px_rgba(255,26,60,0.5)] animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-[#FF1A3C] font-black text-xs">
+              <Lock className="w-4 h-4 text-[#FF1A3C] animate-pulse" />
+              <span>[ УПРАВЛЕНИЕ ЗАБЛОКИРОВАНО ]</span>
+            </div>
+            <p className="text-[10px] text-[#00E5FF]">
+              Защита от случайных нажатий в кармане активна
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsTouchLocked(false)}
+              className="px-5 py-2 bg-[#FF1A3C] hover:bg-[#FF2E50] text-black rounded-xl text-xs font-black flex items-center gap-1.5 shadow-[0_0_15px_rgba(255,26,60,0.7)] active:scale-95 transition-all"
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              <span>РАЗБЛОКИРОВАТЬ</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

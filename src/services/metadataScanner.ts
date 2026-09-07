@@ -431,6 +431,13 @@ export async function parseAudioFileMetadata(file: File): Promise<Partial<Track>
   // Measure actual duration
   const realDuration = await probeAudioDuration(fileUrl);
 
+  if (realDuration > 0 && file.size > 0) {
+    const computedBitrate = Math.round((file.size * 8) / (realDuration * 1000));
+    if (computedBitrate > 32 && computedBitrate < 30000) {
+      hiResInfo.bitrateKbps = computedBitrate;
+    }
+  }
+
   return {
     title: finalTitle,
     artist: finalArtist,
@@ -440,7 +447,7 @@ export async function parseAudioFileMetadata(file: File): Promise<Partial<Track>
     url: fileUrl,
     coverUrl: finalCover,
     filePath: `/storage/emulated/0/Download/${file.name}`,
-    fileSize: `${sizeMb.toFixed(1)} MB`,
+    fileSize: `${sizeMb.toFixed(2)} MB`,
     hiResInfo,
     year: tagYear || '2026',
     genre: tagGenre || 'Hi-Res Audio',
