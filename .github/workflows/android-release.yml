@@ -49,14 +49,11 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --no-daemon -Pandroid.injected.testOnly=false
           cd ..
 
-      - name: Align and Sign Release APK (v1, v2, v3)
+      - name: Sign Release APK with uber-apk-signer (v1 + v2 + v3 + v4 Schemes)
         run: |
-          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
-          echo "Using Android Build Tools: $BUILD_TOOLS_DIR"
-          
           # 1. Определение динамического имени APK под версию релиза
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             RELEASE_TAG="${GITHUB_REF_NAME}"
@@ -64,42 +61,32 @@ jobs:
             RELEASE_TAG="latest"
           fi
           APK_NAME="MuAPlay-${RELEASE_TAG}.apk"
-          OUT_APK="android/app/build/outputs/apk/release/${APK_NAME}"
-          echo "Target APK Name: $APK_NAME"
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
-          echo "OUT_APK=$OUT_APK" >> $GITHUB_ENV
           
-          # 2. Создание надежного Release Keystore через keytool (JDK 21)
-          keytool -genkeypair -v \
-            -keystore release.jks \
-            -alias muaplay_alias \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass muaplaysimplepass \
-            -keypass muaplaysimplepass \
-            -dname "CN=MuAPlay, OU=Audio, O=MuAPlay, L=City, ST=State, C=US"
+          curl -L -o uber-apk-signer.jar https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
+          mkdir -p release-apks
           
-          # 3. Поиск собранного APK
-          RAW_APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          echo "Found build APK: $RAW_APK"
+          # Locate strictly the Release APK output
+          RELEASE_APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$RELEASE_APK" ]; then
+            RELEASE_APK=$(find android/app/build/outputs/apk -name "*release*.apk" | head -n 1)
+          fi
+          echo "Targeting Release APK for signing: $RELEASE_APK"
           
-          # 4. Выравнивание 4-byte (zipalign)
-          $BUILD_TOOLS_DIR/zipalign -v -p -f 4 "$RAW_APK" android/app/build/outputs/apk/release/app-aligned.apk
+          java -jar uber-apk-signer.jar -a "$RELEASE_APK" --out release-apks --allowResign --verbose
           
-          # 5. Подпись APK с целевым динамическим именем
-          $BUILD_TOOLS_DIR/apksigner sign --ks release.jks \
-            --ks-key-alias muaplay_alias \
-            --ks-pass pass:muaplaysimplepass \
-            --key-pass pass:muaplaysimplepass \
-            --v1-signing-enabled true \
-            --v2-signing-enabled true \
-            --v3-signing-enabled true \
-            --out "$OUT_APK" \
-            android/app/build/outputs/apk/release/app-aligned.apk
+          cd release-apks
+          SIGNED_FILE=$(find . -maxdepth 1 -name "*-aligned-signed.apk" | head -n 1)
+          if [ -z "$SIGNED_FILE" ]; then
+            SIGNED_FILE=$(find . -maxdepth 1 -name "*.apk" | head -n 1)
+          fi
           
-          # 6. Валидация подписи
-          $BUILD_TOOLS_DIR/apksigner verify --verbose "$OUT_APK"
+          echo "Final Signed Release APK: $SIGNED_FILE"
+          
+          # Переименовываем в наше целевое имя
+          cp -f "$SIGNED_FILE" "$APK_NAME"
+          echo "OUT_APK=release-apks/$APK_NAME" >> $GITHUB_ENV
+          ls -lh
 
       - name: Upload APK to Workflow Artifacts
         uses: actions/upload-artifact@v4
