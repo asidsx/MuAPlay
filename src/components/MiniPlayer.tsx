@@ -1,5 +1,5 @@
-import React from 'react';
-import { Play, Pause, SkipForward, Heart, ChevronUp } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Play, Pause, SkipForward, Heart, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Track } from '../types/music';
 import { useTrackWaveform } from '../hooks/useTrackWaveform';
 import { CyberCoverImage } from './CyberCoverImage';
@@ -11,6 +11,7 @@ interface MiniPlayerProps {
   duration: number;
   onPlayPause: () => void;
   onNext: () => void;
+  onPrev?: () => void;
   onOpenNowPlaying: () => void;
   onToggleFavorite: (trackId: string) => void;
   onSeek?: (seconds: number) => void;
@@ -23,16 +24,69 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   duration,
   onPlayPause,
   onNext,
+  onPrev,
   onOpenNowPlaying,
   onToggleFavorite,
   onSeek,
 }) => {
+  const [dragOffset, setDragOffset] = useState<number>(0);
+  const [isSwiping, setIsSwiping] = useState<boolean>(false);
+  const pointerStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
   if (!track) return null;
 
   const progressPercent = duration > 0 ? Math.min(Math.max((currentTime / duration) * 100, 0), 100) : 0;
 
   // Track-specific cached DSP waveform resampled to 36 bars
   const { waveform: miniBars } = useTrackWaveform(track, 36);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    pointerStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      time: Date.now(),
+    };
+    setIsSwiping(false);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!pointerStartRef.current) return;
+    const dx = e.clientX - pointerStartRef.current.x;
+    const dy = e.clientY - pointerStartRef.current.y;
+
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      setIsSwiping(true);
+      const clamped = Math.max(-50, Math.min(50, dx));
+      setDragOffset(clamped);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!pointerStartRef.current) return;
+    const dx = e.clientX - pointerStartRef.current.x;
+    const dy = e.clientY - pointerStartRef.current.y;
+    const dt = Date.now() - pointerStartRef.current.time;
+    pointerStartRef.current = null;
+
+    if (Math.abs(dx) >= 35 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) {
+        onNext();
+      } else if (onPrev) {
+        onPrev();
+      }
+    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && dt < 400) {
+      onOpenNowPlaying();
+    }
+
+    setDragOffset(0);
+    setIsSwiping(false);
+  };
+
+  const handlePointerCancel = () => {
+    pointerStartRef.current = null;
+    setDragOffset(0);
+    setIsSwiping(false);
+  };
 
   const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!onSeek || duration <= 0) return;
@@ -44,11 +98,30 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   };
 
   return (
-    <div className="mx-2 mb-1 z-30 shrink-0">
+    <div className="mx-2 mb-1 z-30 shrink-0 select-none">
       <div
-        onClick={onOpenNowPlaying}
-        className="relative bg-[#100308]/95 backdrop-blur-xl border border-[#FF1A3C]/60 hover:border-[#FF1A3C] rounded-xl p-2.5 pt-3.5 shadow-[0_0_20px_rgba(255,26,60,0.25)] flex items-center justify-between cursor-pointer group transition-all"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        style={{
+          transform: dragOffset !== 0 ? `translateX(${dragOffset}px)` : undefined,
+          transition: isSwiping ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)',
+          touchAction: 'pan-y',
+        }}
+        className="relative bg-[#100308]/95 backdrop-blur-xl border border-[#FF1A3C]/60 hover:border-[#FF1A3C] rounded-xl p-2.5 pt-3.5 shadow-[0_0_20px_rgba(255,26,60,0.25)] flex items-center justify-between cursor-pointer group transition-all overflow-hidden"
       >
+        {/* Dynamic swipe edge glows */}
+        {dragOffset < -15 && (
+          <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[#FF1A3C]/40 to-transparent flex items-center justify-end pr-1 pointer-events-none z-20">
+            <ChevronRight className="w-5 h-5 text-[#FF1A3C] animate-pulse" />
+          </div>
+        )}
+        {dragOffset > 15 && (
+          <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#00E5FF]/40 to-transparent flex items-center justify-start pl-1 pointer-events-none z-20">
+            <ChevronLeft className="w-5 h-5 text-[#00E5FF] animate-pulse" />
+          </div>
+        )}
         {/* Visible Cyberpunk Green Mini Waveform Seek Bar in Frame */}
         <div
           onClick={handleSeekClick}

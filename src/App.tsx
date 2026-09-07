@@ -279,6 +279,9 @@ export default function App() {
 
   const handleTogglePlayPause = async () => {
     if (!currentTrack) return;
+    if (currentTrackId !== currentTrack.id) {
+      setCurrentTrackId(currentTrack.id);
+    }
     if (isPlaying) {
       setIsPlaying(false);
       audioEngine.pauseTrack();
@@ -302,12 +305,20 @@ export default function App() {
   const handleNextTrack = () => {
     if (tracks.length === 0) return;
     let nextIndex = 0;
-    const currentIndex = tracks.findIndex((t) => t.id === currentTrackId);
+    const activeId = currentTrackId || currentTrack?.id;
+    const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : -1;
 
     if (isShuffle) {
-      nextIndex = Math.floor(Math.random() * tracks.length);
+      nextIndex = tracks.length > 1 ? Math.floor(Math.random() * tracks.length) : 0;
+      if (tracks.length > 1 && nextIndex === currentIndex) {
+        nextIndex = (currentIndex + 1) % tracks.length;
+      }
     } else {
-      nextIndex = (currentIndex + 1) % tracks.length;
+      if (currentIndex === -1) {
+        nextIndex = tracks.length > 1 ? 1 : 0;
+      } else {
+        nextIndex = (currentIndex + 1) % tracks.length;
+      }
     }
 
     const nextTrack = tracks[nextIndex];
@@ -318,8 +329,10 @@ export default function App() {
 
   const handlePrevTrack = () => {
     if (tracks.length === 0) return;
-    const currentIndex = tracks.findIndex((t) => t.id === currentTrackId);
-    const prevIndex = (currentIndex - 1 + tracks.length) % tracks.length;
+    const activeId = currentTrackId || currentTrack?.id;
+    const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : 0;
+    const effectiveIndex = currentIndex === -1 ? 0 : currentIndex;
+    const prevIndex = (effectiveIndex - 1 + tracks.length) % tracks.length;
     const prevTrack = tracks[prevIndex];
     if (prevTrack) {
       handlePlayTrack(prevTrack);
@@ -1143,6 +1156,7 @@ export default function App() {
           duration={duration}
           onPlayPause={handleTogglePlayPause}
           onNext={handleNextTrack}
+          onPrev={handlePrevTrack}
           onOpenNowPlaying={() => setIsNowPlayingOpen(true)}
           onToggleFavorite={handleToggleFavorite}
           onSeek={handleSeek}

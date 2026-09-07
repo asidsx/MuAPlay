@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ChevronDown,
   Play,
@@ -17,6 +17,8 @@ import {
   Activity,
   Lock,
   Unlock,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Track } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
@@ -77,6 +79,10 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
     return localStorage.getItem('cyber_ring_fx_enabled') !== 'false';
   });
   const [ringToast, setRingToast] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<number>(0);
+  const [isSwiping, setIsSwiping] = useState<boolean>(false);
+  const [swipeFeedback, setSwipeFeedback] = useState<string | null>(null);
+  const pointerStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const toggleRingAnimation = () => {
     setIsRingFxEnabled((prev) => {
@@ -88,6 +94,61 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
       }, 2000);
       return next;
     });
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    pointerStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      time: Date.now(),
+    };
+    setIsSwiping(false);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!pointerStartRef.current) return;
+    const dx = e.clientX - pointerStartRef.current.x;
+    const dy = e.clientY - pointerStartRef.current.y;
+
+    if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+      setIsSwiping(true);
+      const clamped = Math.max(-65, Math.min(65, dx));
+      setDragOffset(clamped);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!pointerStartRef.current) return;
+    const dx = e.clientX - pointerStartRef.current.x;
+    const dy = e.clientY - pointerStartRef.current.y;
+    const dt = Date.now() - pointerStartRef.current.time;
+    pointerStartRef.current = null;
+
+    if (Math.abs(dx) >= 35 && Math.abs(dx) > Math.abs(dy)) {
+      // Horizontal swipe
+      if (dx < 0) {
+        // Right to left swipe -> Next track
+        onNext();
+        setSwipeFeedback('⏭️ СЛЕДУЮЩИЙ ТРЕК');
+      } else {
+        // Left to right swipe -> Prev track
+        onPrev();
+        setSwipeFeedback('⏮️ ПРЕДЫДУЩИЙ ТРЕК');
+      }
+      setTimeout(() => setSwipeFeedback(null), 1200);
+    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && dt < 400) {
+      // Tap/click -> toggle ring FX
+      toggleRingAnimation();
+    }
+
+    setDragOffset(0);
+    setIsSwiping(false);
+  };
+
+  const handlePointerCancel = () => {
+    pointerStartRef.current = null;
+    setDragOffset(0);
+    setIsSwiping(false);
   };
 
   if (!isOpen || !track) return null;
@@ -203,31 +264,50 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
         {activeTab === 'cover' && (
           <div className="relative flex flex-col items-center justify-center my-auto py-2">
             <CyberReactiveRing isPlaying={isPlaying} enabled={isRingFxEnabled} size={320}>
-              {/* Album Card inside Cyberpunk Frame (Click to toggle animation & save battery) */}
-              <button
-                onClick={toggleRingAnimation}
-                type="button"
-                className={`relative w-48 h-48 sm:w-52 sm:h-52 rounded-2xl overflow-hidden shadow-2xl border-2 transition-all duration-300 cursor-pointer group focus:outline-none ${
+              {/* Album Card inside Cyberpunk Frame with Touch/Mouse Swipe support */}
+              <div
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
+                style={{
+                  transform: dragOffset !== 0 ? `translateX(${dragOffset}px) rotate(${dragOffset * 0.08}deg)` : undefined,
+                  transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)',
+                  touchAction: 'pan-y',
+                }}
+                className={`relative w-48 h-48 sm:w-52 sm:h-52 rounded-2xl overflow-hidden shadow-2xl border-2 cursor-grab active:cursor-grabbing select-none group focus:outline-none ${
                   isRingFxEnabled
                     ? 'border-[#FF1A3C]/80 ' + (isPlaying ? 'scale-100 shadow-[0_0_35px_rgba(255,26,60,0.5)]' : 'scale-95')
                     : 'border-[#555]/60 opacity-90 scale-95 shadow-lg grayscale-[15%]'
                 }`}
-                title="Нажмите на обложку для включения/отключения анимации эквалайзера (экономия батареи)"
+                title="Свайп влево — следующий трек, свайп вправо — предыдущий. Тап — переключение анимации"
               >
                 <CyberCoverImage
                   src={track.coverUrl}
                   alt={track.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0206]/80 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0206]/80 via-transparent to-transparent pointer-events-none" />
                 
                 {/* Corner HUD brackets */}
-                <div className="absolute top-2 left-2 text-[9px] font-mono font-bold text-[#FF1A3C] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#FF1A3C]/40">
+                <div className="absolute top-2 left-2 text-[9px] font-mono font-bold text-[#FF1A3C] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#FF1A3C]/40 pointer-events-none">
                   [ {track.hiResInfo?.format || 'AUDIO'} // {track.hiResInfo?.sampleRate ? `${track.hiResInfo.sampleRate / 1000}k` : '44.1k'} ]
                 </div>
-                <div className="absolute bottom-2 right-2 text-[9px] font-mono font-bold text-[#00E5FF] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#00E5FF]/40">
+                <div className="absolute bottom-2 right-2 text-[9px] font-mono font-bold text-[#00E5FF] bg-[#0A0206]/80 px-1.5 py-0.5 rounded border border-[#00E5FF]/40 pointer-events-none">
                   {track.hiResInfo?.isLossless ? 'LOSSLESS' : 'HI-RES'}
                 </div>
+
+                {/* Left/Right Interactive Dynamic Swipe Cues during drag */}
+                {dragOffset < -15 && (
+                  <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#FF1A3C]/40 to-transparent flex items-center justify-end pr-2 pointer-events-none animate-in fade-in">
+                    <ChevronRight className="w-6 h-6 text-[#FF1A3C] animate-pulse" />
+                  </div>
+                )}
+                {dragOffset > 15 && (
+                  <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#00E5FF]/40 to-transparent flex items-center justify-start pl-2 pointer-events-none animate-in fade-in">
+                    <ChevronLeft className="w-6 h-6 text-[#00E5FF] animate-pulse" />
+                  </div>
+                )}
 
                 {/* Battery Saver Status Badge on Cover */}
                 {!isRingFxEnabled && (
@@ -237,13 +317,13 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
                     </span>
                   </div>
                 )}
-              </button>
+              </div>
             </CyberReactiveRing>
 
-            {/* Quick Toggle Toast Notification */}
-            {ringToast && (
+            {/* Quick Swipe Toast Feedback or Ring Toggle Notification */}
+            {(swipeFeedback || ringToast) && (
               <div className="absolute -bottom-2 z-30 bg-[#150308]/95 border border-[#FF1A3C] text-white px-3 py-1 rounded-full text-[10px] font-mono tracking-wider shadow-[0_0_15px_rgba(255,26,60,0.6)] animate-in fade-in zoom-in-95 duration-200">
-                {ringToast}
+                {swipeFeedback || ringToast}
               </div>
             )}
           </div>

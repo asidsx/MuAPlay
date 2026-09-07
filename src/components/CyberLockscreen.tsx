@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Lock,
   Unlock,
@@ -14,6 +14,8 @@ import {
   ChevronUp,
   Volume2,
   Cpu,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Track } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
@@ -54,6 +56,58 @@ export const CyberLockscreen: React.FC<CyberLockscreenProps> = ({
   const [currentSecondsStr, setCurrentSecondsStr] = useState('');
   const [currentDateStr, setCurrentDateStr] = useState('');
   const [torchActive, setTorchActive] = useState(false);
+  const [widgetDragOffset, setWidgetDragOffset] = useState<number>(0);
+  const [isWidgetSwiping, setIsWidgetSwiping] = useState<boolean>(false);
+  const [swipeFeedback, setSwipeFeedback] = useState<string | null>(null);
+  const widgetPointerStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleWidgetPointerDown = (e: React.PointerEvent) => {
+    widgetPointerStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      time: Date.now(),
+    };
+    setIsWidgetSwiping(false);
+  };
+
+  const handleWidgetPointerMove = (e: React.PointerEvent) => {
+    if (!widgetPointerStartRef.current) return;
+    const dx = e.clientX - widgetPointerStartRef.current.x;
+    const dy = e.clientY - widgetPointerStartRef.current.y;
+
+    if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+      setIsWidgetSwiping(true);
+      const clamped = Math.max(-60, Math.min(60, dx));
+      setWidgetDragOffset(clamped);
+    }
+  };
+
+  const handleWidgetPointerUp = (e: React.PointerEvent) => {
+    if (!widgetPointerStartRef.current) return;
+    const dx = e.clientX - widgetPointerStartRef.current.x;
+    const dy = e.clientY - widgetPointerStartRef.current.y;
+    widgetPointerStartRef.current = null;
+
+    if (Math.abs(dx) >= 35 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) {
+        onNext();
+        setSwipeFeedback('⏭️ СЛЕДУЮЩИЙ ТРЕК');
+      } else {
+        onPrev();
+        setSwipeFeedback('⏮️ ПРЕДЫДУЩИЙ ТРЕК');
+      }
+      setTimeout(() => setSwipeFeedback(null), 1200);
+    }
+
+    setWidgetDragOffset(0);
+    setIsWidgetSwiping(false);
+  };
+
+  const handleWidgetPointerCancel = () => {
+    widgetPointerStartRef.current = null;
+    setWidgetDragOffset(0);
+    setIsWidgetSwiping(false);
+  };
 
   // Synchronized Cyber Subtitles
   const parsedLRC = React.useMemo(() => {
@@ -168,18 +222,50 @@ export const CyberLockscreen: React.FC<CyberLockscreenProps> = ({
       {/* Cyberpunk Music Lockscreen Widget */}
       <div className="w-full max-w-sm mx-auto z-30 my-auto">
         {track ? (
-          <div className="relative bg-[#100308]/92 backdrop-blur-2xl border-2 border-[#FF1A3C]/70 rounded-2xl p-3.5 shadow-[0_0_35px_rgba(255,26,60,0.35)] space-y-3">
+          <div
+            onPointerDown={handleWidgetPointerDown}
+            onPointerMove={handleWidgetPointerMove}
+            onPointerUp={handleWidgetPointerUp}
+            onPointerCancel={handleWidgetPointerCancel}
+            style={{
+              transform: widgetDragOffset !== 0 ? `translateX(${widgetDragOffset}px)` : undefined,
+              transition: isWidgetSwiping ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)',
+              touchAction: 'pan-y',
+            }}
+            className="relative bg-[#100308]/92 backdrop-blur-2xl border-2 border-[#FF1A3C]/70 rounded-2xl p-3.5 shadow-[0_0_35px_rgba(255,26,60,0.35)] space-y-3 select-none"
+          >
             {/* Widget Header Tag */}
             <div className="flex items-center justify-between border-b border-[#FF1A3C]/30 pb-2 text-[9px]">
               <div className="flex items-center gap-1.5 text-[#00E5FF] font-bold">
                 <span className="w-2 h-2 rounded-full bg-[#00E5FF] shadow-[0_0_8px_#00E5FF] animate-ping" />
-                <span>[ ВИДЖЕТ // NEURAL_AUDIO_2077 ]</span>
+                <span>[ ВИДЖЕТ // СВАЙП ДЛЯ СМЕНЫ ТРЕКА ]</span>
               </div>
 
               <span className="px-1.5 py-0.2 rounded bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40 font-black text-[8px]">
                 {track.hiResInfo?.format || 'FLAC 24B'}
               </span>
             </div>
+
+            {/* Left/Right Dynamic Swipe Cues during drag */}
+            {widgetDragOffset < -15 && (
+              <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#FF1A3C]/40 to-transparent flex items-center justify-end pr-2 pointer-events-none rounded-r-2xl z-20">
+                <ChevronRight className="w-6 h-6 text-[#FF1A3C] animate-pulse" />
+              </div>
+            )}
+            {widgetDragOffset > 15 && (
+              <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#00E5FF]/40 to-transparent flex items-center justify-start pl-2 pointer-events-none rounded-l-2xl z-20">
+                <ChevronLeft className="w-6 h-6 text-[#00E5FF] animate-pulse" />
+              </div>
+            )}
+
+            {/* Swipe Feedback Toast */}
+            {swipeFeedback && (
+              <div className="absolute -top-3 inset-x-0 flex justify-center z-30 pointer-events-none animate-in fade-in zoom-in-95">
+                <span className="bg-[#180309] border border-[#FF1A3C] text-white px-3 py-0.5 rounded-full text-[10px] font-mono tracking-wider shadow-[0_0_12px_#FF1A3C]">
+                  {swipeFeedback}
+                </span>
+              </div>
+            )}
 
             {/* Track Info & Artwork */}
             <div className="flex items-center gap-3">
