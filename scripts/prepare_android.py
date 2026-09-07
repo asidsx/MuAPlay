@@ -304,12 +304,11 @@ public class AudioForegroundService extends Service {
             m_content = f.read()
 
         permissions = [
+            '<uses-permission android:name="android.permission.INTERNET" />',
             '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
             '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />',
             '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
-            '<uses-permission android:name="android.permission.WAKE_LOCK" />',
-            '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />',
-            '<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />'
+            '<uses-permission android:name="android.permission.WAKE_LOCK" />'
         ]
 
         permissions_to_add = [p for p in permissions if p not in m_content]
