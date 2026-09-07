@@ -1,0 +1,19 @@
+{
+  "name": "MuAPlay // Cyber Audio 2077",
+  "short_name": "MuAPlay",
+  "description": "Cyberpunk 2077 styled Hi-Res Android music player with lossless audio, 10-band equalizer, and reactive HUD visualizers.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0205",
+  "theme_color": "#FF1A3C",
+  "categories": ["music", "audio", "entertainment"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230B0205'/%3E%3Ccircle cx='256' cy='256' r='200' stroke='%23FF1A3C' stroke-width='16' fill='none'/%3E%3Ccircle cx='256' cy='256' r='140' stroke='%2300E5FF' stroke-width='8' fill='none' stroke-dasharray='10 15'/%3E%3Cpolygon points='220,180 340,256 220,332' fill='%23FF1A3C'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
