@@ -24,7 +24,8 @@
 [![Last Commit](https://img.shields.io/github/last-commit/asidsx/muaplay-cyber-audio?style=flat-square&color=3DDC84&label=%D0%9E%D0%91%D0%9D%D0%9E%D0%92%D0%9B%D0%95%D0%9D%D0%9E)](https://github.com)
 <!-- Платформа и лицензия -->
 [![Платформа](https://img.shields.io/badge/%D0%9F%D0%9B%D0%90%D0%A2%D0%A4%D0%9E%D0%A0%D0%9C%D0%90-Android%208.0%2B%20%7C%20PWA-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com)
-[![Лицензия](https://img.shields.io/badge/%D0%9B%D0%98%D0%A6%D0%95%D0%9D%D0%97%D0%98%D0%AF-MIT%20(Open%20Source)-FF1A3C?style=flat-square)](LICENSE)
+[![Лицензия](https://img.shields.io/badge/%D0%9B%D0%98%D0%A6%D0%95%D0%9D%D0%97%D0%98%D0%AF-CC%20BY--NC--SA%204.0%20(NON--COMMERCIAL)-FF1A3C?style=flat-square)](LICENSE)
+[![No Commercial Use](https://img.shields.io/badge/%D0%9F%D0%A0%D0%9E%D0%94%D0%90%D0%96%D0%90-%D0%97%D0%90%D0%9F%D0%A0%D0%95%D0%A9%D0%95%D0%9D%D0%90%20(FREE%20ONLY)-00E5FF?style=flat-square)](LICENSE)
 
 </div>
 
@@ -118,9 +119,14 @@ npm run dev
 
 ---
 
-## 📄 Лицензия
+## 📄 Лицензия и условия использования
 
-Проект распространяется под лицензией **MIT License** — абсолютно бесплатно для личного и коммерческого использования.
+Проект распространяется под некоммерческой публичной лицензией **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)** / **PolyForm Noncommercial 1.0.0**:
+
+- ✅ **Разрешено:** Свободное личное, домашнее, образовательное и некоммерческое использование, изучение кода, создание личных модификаций и форков с указанием авторства.
+- 🚫 **СТРОГО ЗАПРЕЩЕНО:** Продажа приложения или его исходного кода, распространение на платной основе, включение платных подписок, монетизация через рекламу, а также публикация платных сборок в магазинах приложений (Google Play, RuStore, App Store и т.д.).
+
+Подробный юридический текст условий доступен в файле [LICENSE](LICENSE).
 
 <div align="center">
 
