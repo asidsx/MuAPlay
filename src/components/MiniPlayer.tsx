@@ -33,12 +33,12 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   const [isSwiping, setIsSwiping] = useState<boolean>(false);
   const pointerStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
+  // Track-specific cached DSP waveform resampled to 36 bars
+  const { waveform: miniBars } = useTrackWaveform(track, 36);
+
   if (!track) return null;
 
   const progressPercent = duration > 0 ? Math.min(Math.max((currentTime / duration) * 100, 0), 100) : 0;
-
-  // Track-specific cached DSP waveform resampled to 36 bars
-  const { waveform: miniBars } = useTrackWaveform(track, 36);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     pointerStartRef.current = {
