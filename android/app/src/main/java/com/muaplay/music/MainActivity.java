@@ -1,4 +1,4 @@
-package com.muaplay.app;
+package com.muaplay.music;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;

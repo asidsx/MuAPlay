@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.muaplay.app"
+    namespace = "com.muaplay.music"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.muaplay.app"
+        applicationId "com.muaplay.music"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

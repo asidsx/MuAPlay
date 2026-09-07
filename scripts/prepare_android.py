@@ -2,7 +2,7 @@ import os
 
 def configure_android():
     # 1. Очистка устаревшего фонового сервиса
-    java_dir = 'android/app/src/main/java/com/muaplay/app'
+    java_dir = 'android/app/src/main/java/com/muaplay/music'
     os.makedirs(java_dir, exist_ok=True)
     
     old_service_file = os.path.join(java_dir, 'AudioForegroundService.java')
@@ -13,7 +13,7 @@ def configure_android():
             pass
 
     # 2. Чистый стандартный MainActivity.java (как в AudioEco / Capacitor)
-    main_activity_code = '''package com.muaplay.app;
+    main_activity_code = '''package com.muaplay.music;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
