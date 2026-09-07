@@ -118,6 +118,23 @@ export function parseFilenameInfo(fileName: string): FilenameParsedInfo {
 }
 
 /**
+ * Converts binary Uint8Array/ArrayBuffer to a durable Base64 Data URL
+ * This ensures album art persists in localStorage & IndexedDB across reboots without expiring
+ */
+export function uint8ArrayToBase64DataUrl(bytes: Uint8Array, format = 'image/jpeg'): string {
+  let binary = '';
+  const len = bytes.byteLength;
+  const chunkSize = 8192;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+  }
+  return `data:${format};base64,${btoa(binary)}`;
+}
+
+/**
  * Reads tags using jsmediatags (ID3v1, ID3v2, MP4/AAC)
  */
 async function readTagsWithJsmediatags(file: File): Promise<{
@@ -136,13 +153,12 @@ async function readTagsWithJsmediatags(file: File): Promise<{
           const tags = tag?.tags || {};
           let coverUrl: string | undefined;
 
-          // Picture / Album Art
+          // Picture / Album Art (Convert to persistent base64 Data URL)
           if (tags.picture) {
             try {
               const { data, format } = tags.picture;
               const byteArray = new Uint8Array(data);
-              const blob = new Blob([byteArray], { type: format || 'image/jpeg' });
-              coverUrl = URL.createObjectURL(blob);
+              coverUrl = uint8ArrayToBase64DataUrl(byteArray, format || 'image/jpeg');
             } catch {
               // Ignore image conversion error
             }
@@ -297,8 +313,7 @@ async function readFlacVorbisMetadata(file: File): Promise<{
 
           if (picOffset + dataLen <= buffer.byteLength) {
             const imgBytes = new Uint8Array(buffer, picOffset, dataLen);
-            const blob = new Blob([imgBytes], { type: mime || 'image/jpeg' });
-            coverUrl = URL.createObjectURL(blob);
+            coverUrl = uint8ArrayToBase64DataUrl(imgBytes, mime || 'image/jpeg');
           }
         } catch {
           // Ignore picture parsing failure

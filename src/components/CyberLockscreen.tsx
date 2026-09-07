@@ -18,6 +18,7 @@ import {
 import { Track } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
 import { parseLRC, getActiveLyricIndex } from '../services/lyricsService';
+import { CyberCoverImage } from './CyberCoverImage';
 
 interface CyberLockscreenProps {
   isOpen: boolean;
@@ -190,8 +191,8 @@ export const CyberLockscreen: React.FC<CyberLockscreenProps> = ({
                 }}
                 className="relative w-14 h-14 rounded-xl overflow-hidden bg-[#0A0206] shrink-0 border-2 border-[#FF1A3C]/70 cursor-pointer shadow-[0_0_12px_rgba(255,26,60,0.3)] group"
               >
-                <img
-                  src={track.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
+                <CyberCoverImage
+                  src={track.coverUrl}
                   alt={track.title}
                   className={`w-full h-full object-cover ${isPlaying ? 'scale-105' : ''}`}
                 />

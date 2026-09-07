@@ -20,6 +20,7 @@ import {
 import { Track } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
 import { CyberLyricsView } from './CyberLyricsView';
+import { CyberCoverImage } from './CyberCoverImage';
 
 interface NowPlayingModalProps {
   isOpen: boolean;
@@ -198,8 +199,8 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
                 isPlaying ? 'scale-100 shadow-[0_0_25px_rgba(255,26,60,0.4)]' : 'scale-95'
               }`}
             >
-              <img
-                src={track.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
+              <CyberCoverImage
+                src={track.coverUrl}
                 alt={track.title}
                 className="w-full h-full object-cover"
               />

@@ -39,6 +39,8 @@ import { PlaylistView } from './components/PlaylistView';
 import { DownloadsScanner } from './components/DownloadsScanner';
 import { EqualizerView } from './components/EqualizerView';
 import { CyberLockscreen } from './components/CyberLockscreen';
+import { CyberCoverImage } from './components/CyberCoverImage';
+import { getAudioBlob, getCoverCache, saveCoverCache } from './services/audioStorage';
 
 export default function App() {
   // Navigation State
@@ -116,6 +118,46 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('android_music_playlists', JSON.stringify(playlists));
   }, [playlists]);
+
+  // Auto-restore / rehydrate covers if previous session stored ephemeral blob: URLs
+  useEffect(() => {
+    const restoreCovers = async () => {
+      let hasChanges = false;
+      const updated = await Promise.all(
+        tracks.map(async (t) => {
+          if (!t.coverUrl || t.coverUrl.startsWith('blob:')) {
+            // 1. Try cached cover from IndexedDB
+            const cached = await getCoverCache(t.id);
+            if (cached && !cached.startsWith('blob:')) {
+              hasChanges = true;
+              return { ...t, coverUrl: cached };
+            }
+
+            // 2. Try re-extracting embedded ID3/Vorbis cover from stored audio blob
+            const blob = await getAudioBlob(t.id);
+            if (blob) {
+              try {
+                const meta = await parseAudioFileMetadata(blob as File);
+                if (meta.coverUrl && !meta.coverUrl.startsWith('blob:')) {
+                  await saveCoverCache(t.id, meta.coverUrl);
+                  hasChanges = true;
+                  return { ...t, coverUrl: meta.coverUrl };
+                }
+              } catch {}
+            }
+          }
+          return t;
+        })
+      );
+      if (hasChanges) {
+        setTracks(updated);
+      }
+    };
+
+    if (tracks.length > 0) {
+      restoreCovers();
+    }
+  }, []);
 
   const currentTrack = tracks.find((t) => t.id === currentTrackId) || tracks[0] || null;
 
@@ -859,8 +901,8 @@ export default function App() {
                     >
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/40">
-                          <img
-                            src={track.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
+                          <CyberCoverImage
+                            src={track.coverUrl}
                             alt={track.title}
                             className="w-full h-full object-cover"
                           />

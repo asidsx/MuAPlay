@@ -4,9 +4,10 @@
  */
 
 const DB_NAME = 'MuAPlayAudioDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'audio_blobs';
 const WAVEFORM_STORE = 'waveform_cache';
+const COVER_STORE = 'cover_cache';
 const blobUrlCache = new Map<string, string>();
 
 function openDB(): Promise<IDBDatabase> {
@@ -20,10 +21,43 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(WAVEFORM_STORE)) {
         db.createObjectStore(WAVEFORM_STORE);
       }
+      if (!db.objectStoreNames.contains(COVER_STORE)) {
+        db.createObjectStore(COVER_STORE);
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+
+export async function saveCoverCache(trackId: string, coverDataUrl: string): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(COVER_STORE, 'readwrite');
+      const store = tx.objectStore(COVER_STORE);
+      const req = store.put(coverDataUrl, trackId);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('Failed to save cover cache:', err);
+  }
+}
+
+export async function getCoverCache(trackId: string): Promise<string | null> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(COVER_STORE, 'readonly');
+      const store = tx.objectStore(COVER_STORE);
+      const req = store.get(trackId);
+      req.onsuccess = () => resolve(typeof req.result === 'string' ? req.result : null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function saveAudioBlob(trackId: string, fileOrBlob: Blob): Promise<void> {

@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Pause, SkipForward, Heart, ChevronUp } from 'lucide-react';
 import { Track } from '../types/music';
 import { useTrackWaveform } from '../hooks/useTrackWaveform';
+import { CyberCoverImage } from './CyberCoverImage';
 
 interface MiniPlayerProps {
   track: Track | null;
@@ -86,8 +87,8 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         {/* Left: Artwork & Track info */}
         <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
           <div className="relative w-11 h-11 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/40 shadow-[0_0_8px_rgba(255,26,60,0.2)]">
-            <img
-              src={track.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
+            <CyberCoverImage
+              src={track.coverUrl}
               alt={track.title}
               className={`w-full h-full object-cover ${
                 isPlaying ? 'scale-105 transition-transform duration-1000' : ''
