@@ -47,6 +47,9 @@ class AudioEngine {
           this.gainNode = this.ctx.createGain();
           this.analyserNode = this.ctx.createAnalyser();
           this.analyserNode.fftSize = 256;
+          this.analyserNode.smoothingTimeConstant = 0.65;
+          this.analyserNode.minDecibels = -90;
+          this.analyserNode.maxDecibels = -10;
 
           // Build 10-Band Graphic Equalizer
           this.eqFilters = EQ_FREQUENCIES.map((freq) => {

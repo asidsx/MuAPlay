@@ -185,12 +185,12 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
 
         {/* Tab 1: Spinning Reactive Holographic Equalizer Ring & Cyber Album Cover */}
         {activeTab === 'cover' && (
-          <div className="relative flex items-center justify-center my-auto">
-            <CyberReactiveRing isPlaying={isPlaying} size={300}>
+          <div className="relative flex items-center justify-center my-auto py-2">
+            <CyberReactiveRing isPlaying={isPlaying} size={320}>
               {/* Album Card inside Cyberpunk Frame */}
               <div
-                className={`relative w-52 h-52 sm:w-56 sm:h-56 rounded-2xl overflow-hidden shadow-2xl border-2 border-[#FF1A3C]/80 transition-transform duration-500 ${
-                  isPlaying ? 'scale-100 shadow-[0_0_30px_rgba(255,26,60,0.45)]' : 'scale-95'
+                className={`relative w-48 h-48 sm:w-52 sm:h-52 rounded-2xl overflow-hidden shadow-2xl border-2 border-[#FF1A3C]/80 transition-transform duration-300 ${
+                  isPlaying ? 'scale-100 shadow-[0_0_35px_rgba(255,26,60,0.5)]' : 'scale-95'
                 }`}
               >
                 <CyberCoverImage
