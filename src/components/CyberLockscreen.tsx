@@ -239,6 +239,7 @@ export const CyberLockscreen: React.FC<CyberLockscreenProps> = ({
                 duration={duration}
                 isPlaying={isPlaying}
                 onSeek={onSeek}
+                track={track}
                 trackId={track.id}
                 trackTitle={track.title}
                 compact={true}

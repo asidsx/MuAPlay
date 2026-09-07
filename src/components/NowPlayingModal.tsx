@@ -307,6 +307,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
             duration={duration}
             isPlaying={isPlaying}
             onSeek={onSeek}
+            track={track}
             trackId={track.id}
             trackTitle={track.title}
           />

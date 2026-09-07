@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Pause, SkipForward, Heart, ChevronUp } from 'lucide-react';
 import { Track } from '../types/music';
+import { useTrackWaveform } from '../hooks/useTrackWaveform';
 
 interface MiniPlayerProps {
   track: Track | null;
@@ -29,12 +30,8 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
   const progressPercent = duration > 0 ? Math.min(Math.max((currentTime / duration) * 100, 0), 100) : 0;
 
-  // 36 mini waveform bar heights
-  const miniBars = [
-    0.3, 0.5, 0.8, 0.4, 0.6, 0.9, 0.7, 0.5, 0.85, 1.0, 0.65, 0.4, 0.75, 0.9, 0.55, 0.7,
-    0.85, 0.95, 0.6, 0.45, 0.8, 0.7, 0.9, 1.0, 0.75, 0.5, 0.65, 0.85, 0.6, 0.4, 0.7, 0.9,
-    0.5, 0.35, 0.6, 0.4
-  ];
+  // Track-specific cached DSP waveform resampled to 36 bars
+  const { waveform: miniBars } = useTrackWaveform(track, 36);
 
   const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!onSeek || duration <= 0) return;

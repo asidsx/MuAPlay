@@ -4,8 +4,9 @@
  */
 
 const DB_NAME = 'MuAPlayAudioDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'audio_blobs';
+const WAVEFORM_STORE = 'waveform_cache';
 const blobUrlCache = new Map<string, string>();
 
 function openDB(): Promise<IDBDatabase> {
@@ -15,6 +16,9 @@ function openDB(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
+      }
+      if (!db.objectStoreNames.contains(WAVEFORM_STORE)) {
+        db.createObjectStore(WAVEFORM_STORE);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -73,12 +77,87 @@ export async function getAudioBlobUrl(trackId: string): Promise<string | null> {
   }
 }
 
+export async function getAudioBlob(trackId: string): Promise<Blob | null> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(trackId);
+      req.onsuccess = () => {
+        if (req.result && req.result instanceof Blob) {
+          resolve(req.result);
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('Failed to retrieve raw audio blob:', err);
+    return null;
+  }
+}
+
+export async function saveWaveformCache(trackId: string, peaks: number[]): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(WAVEFORM_STORE, 'readwrite');
+      const store = tx.objectStore(WAVEFORM_STORE);
+      const req = store.put(peaks, trackId);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('Failed to save waveform cache:', err);
+  }
+}
+
+export async function getWaveformCache(trackId: string): Promise<number[] | null> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(WAVEFORM_STORE, 'readonly');
+      const store = tx.objectStore(WAVEFORM_STORE);
+      const req = store.get(trackId);
+      req.onsuccess = () => {
+        if (Array.isArray(req.result)) {
+          resolve(req.result);
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('Failed to get waveform cache:', err);
+    return null;
+  }
+}
+
+export async function deleteWaveformCache(trackId: string): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(WAVEFORM_STORE, 'readwrite');
+      const store = tx.objectStore(WAVEFORM_STORE);
+      const req = store.delete(trackId);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('Failed to delete waveform cache:', err);
+  }
+}
+
 export async function deleteAudioBlob(trackId: string): Promise<void> {
   const cached = blobUrlCache.get(trackId);
   if (cached) {
     URL.revokeObjectURL(cached);
     blobUrlCache.delete(trackId);
   }
+  await deleteWaveformCache(trackId);
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {

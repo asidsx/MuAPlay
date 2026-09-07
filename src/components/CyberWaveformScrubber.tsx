@@ -1,11 +1,14 @@
-import React, { useRef, useState, useMemo, useCallback } from 'react';
-import { Activity, Clock, Cpu } from 'lucide-react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
+import { Activity, Clock, Database, CheckCircle2 } from 'lucide-react';
+import { Track } from '../types/music';
+import { useTrackWaveform } from '../hooks/useTrackWaveform';
 
 interface CyberWaveformScrubberProps {
   currentTime: number;
   duration: number;
   isPlaying: boolean;
   onSeek: (seconds: number) => void;
+  track?: Partial<Track> | null;
   trackId?: string;
   trackTitle?: string;
   compact?: boolean;
@@ -16,6 +19,7 @@ export const CyberWaveformScrubber: React.FC<CyberWaveformScrubberProps> = ({
   duration,
   isPlaying,
   onSeek,
+  track,
   trackId = 'default-track',
   trackTitle = 'Neural Audio',
   compact = false,
@@ -25,34 +29,14 @@ export const CyberWaveformScrubber: React.FC<CyberWaveformScrubberProps> = ({
   const [hoverPercent, setHoverPercent] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Generate 64 deterministic audio waveform spikes mirrored top/bottom (Image 3 inspired)
   const barCount = compact ? 48 : 68;
-  const waveformBars = useMemo(() => {
-    // Seeded pseudo-random generator from string
-    let seed = 0;
-    const str = `${trackId}-${trackTitle}`;
-    for (let i = 0; i < str.length; i++) {
-      seed = (seed * 31 + str.charCodeAt(i)) & 0xffffffff;
-    }
-    const pseudoRandom = (offset: number) => {
-      const x = Math.sin(seed + offset * 9999) * 10000;
-      return x - Math.floor(x);
-    };
 
-    const bars: number[] = [];
-    for (let i = 0; i < barCount; i++) {
-      const normalizedPos = i / (barCount - 1);
-      // Natural music envelope: low start, builds up in verse, chorus drops, calm outro
-      const envelope =
-        Math.sin(normalizedPos * Math.PI) * 0.45 +
-        Math.sin(normalizedPos * Math.PI * 3 + 1.2) * 0.25 +
-        0.3;
-      const noise = pseudoRandom(i) * 0.45;
-      const height = Math.min(Math.max((envelope + noise) * 0.85, 0.15), 1.0);
-      bars.push(height);
-    }
-    return bars;
-  }, [trackId, trackTitle, barCount]);
+  const trackObj = useMemo(() => {
+    if (track) return track;
+    return { id: trackId, title: trackTitle, duration };
+  }, [track, trackId, trackTitle, duration]);
+
+  const { waveform: waveformBars, isCached, isGenerating, source } = useTrackWaveform(trackObj, barCount);
 
   const progressPercent = duration > 0 ? Math.min(Math.max((currentTime / duration) * 100, 0), 100) : 0;
 
@@ -122,6 +106,19 @@ export const CyberWaveformScrubber: React.FC<CyberWaveformScrubberProps> = ({
           <span className="text-glow-green">
             {compact ? '[ DSP // WAVE ]' : '[ AUDIO_DSP // NEURAL_WAVEFORM ]'}
           </span>
+          {isGenerating ? (
+            <span className="text-[8px] px-1 py-0.2 rounded bg-[#FFB800]/20 text-[#FFB800] border border-[#FFB800]/40 animate-pulse hidden xs:inline">
+              ГЕНЕРАЦИЯ DSP...
+            </span>
+          ) : isCached ? (
+            <span
+              className="text-[8px] px-1 py-0.2 rounded bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/40 flex items-center gap-0.5 hidden xs:inline-flex"
+              title="Аудиоволна DSP сохранена в IndexedDB кэш"
+            >
+              <Database className="w-2.5 h-2.5" />
+              КЭШ DSP
+            </span>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
@@ -130,7 +127,7 @@ export const CyberWaveformScrubber: React.FC<CyberWaveformScrubberProps> = ({
           </span>
           {!compact && (
             <span className="text-[8px] text-[#00FF66]/60 hidden xs:inline">
-              // LOSSLESS_PCM
+              {source === 'pcm' ? '// DECODED_PCM' : '// ACOUSTIC_DSP'}
             </span>
           )}
         </div>

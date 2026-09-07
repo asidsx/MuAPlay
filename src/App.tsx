@@ -28,6 +28,7 @@ import { audioEngine } from './services/audioEngine';
 import { parseAudioFileMetadata, fetchMissingAlbumArt } from './services/metadataScanner';
 import { fetchLyricsOnline } from './services/lyricsService';
 import { saveAudioBlob, getAudioBlobUrl, deleteAudioBlob } from './services/audioStorage';
+import { prefetchTrackWaveform } from './services/waveformService';
 import { generateSyntheticAudioBlob } from './utils/audioGenerator';
 import { scanNativeDownloadDirectory, loadNativeFileAsBlob } from './services/nativeScanner';
 import { AndroidFrame } from './components/AndroidFrame';
@@ -174,6 +175,7 @@ export default function App() {
     }
 
     setCurrentTrackId(track.id);
+    prefetchTrackWaveform(track);
 
     const playUrl = await getPlayableUrl(track);
     if (!playUrl) {
@@ -605,6 +607,7 @@ export default function App() {
       };
 
       await saveAudioBlob(trackObj.id, file);
+      prefetchTrackWaveform(trackObj);
 
       parsedFiles.push(scanned);
       newTracks.push(trackObj);
