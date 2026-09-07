@@ -238,7 +238,8 @@ public class AudioForegroundService extends Service {
             .setStyle(new MediaStyle()
                 .setMediaSession(mediaSession.getSessionToken())
                 .setShowActionsInCompactView(0, 1, 2)
-                .setShowCancelButton(true, pToggle));
+                .setShowCancelButton(true)
+                .setCancelButtonIntent(pToggle));
 
         return builder.build();
     }
