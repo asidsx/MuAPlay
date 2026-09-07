@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Radio,
   Search,
@@ -65,6 +66,17 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
   const parsedLRC = useMemo(() => {
     return parseLRC(track.lyrics || '');
   }, [track.lyrics]);
+
+  // Lock body scroll when search modal is open on mobile
+  useEffect(() => {
+    if (isSearchModalOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isSearchModalOpen]);
 
   // Determine currently active line
   const activeIndex = useMemo(() => {
@@ -154,7 +166,11 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
   };
 
   const handleOpenSearchModal = () => {
-    setSearchArtist(cleanArtist(track.artist || ''));
+    let rawArt = track.artist || '';
+    // Strip trailing "// title" or file markers
+    rawArt = rawArt.replace(/\s*\/\/\s*.*$/, '');
+    const cleanedArt = cleanArtist(rawArt);
+    setSearchArtist(cleanedArt);
     setSearchTitle(cleanTitle(track.title || ''));
     setSearchResults([]);
     setIsSearchModalOpen(true);
@@ -398,104 +414,161 @@ export const CyberLyricsView: React.FC<CyberLyricsViewProps> = ({
         )}
       </div>
 
-      {/* Manual Search Modal Dialog */}
-      {isSearchModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#000000]/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#0D0207] border border-[#FF1A3C]/60 rounded-2xl p-4 space-y-3 font-mono shadow-[0_0_30px_rgba(255,26,60,0.3)]">
-            <div className="flex items-center justify-between pb-2 border-b border-[#FF1A3C]/30">
-              <span className="text-xs font-bold text-[#FFFFFF] flex items-center gap-1.5">
-                <Search className="w-4 h-4 text-[#00E5FF]" />
-                <span>ПОИСК ЛИРИКИ (LRCLIB)</span>
-              </span>
-              <button
-                onClick={() => setIsSearchModalOpen(false)}
-                className="p-1 rounded text-[#883344] hover:text-[#FF1A3C]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div>
-                <label className="text-[10px] text-[#883344] uppercase block mb-0.5">Исполнитель</label>
-                <input
-                  type="text"
-                  value={searchArtist}
-                  onChange={(e) => setSearchArtist(e.target.value)}
-                  placeholder="Например: Linkin Park"
-                  className="w-full bg-[#16030B] border border-[#FF1A3C]/40 rounded-lg px-2.5 py-1.5 text-xs text-[#E0E0E0] focus:outline-none focus:border-[#00E5FF]"
-                />
+      {/* Manual Search Modal Dialog (Rendered in Portal to prevent player overlay & mobile keyboard squish) */}
+      {isSearchModalOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[99999] bg-[#050104]/98 backdrop-blur-2xl flex flex-col justify-start items-center p-3 sm:p-5 overflow-y-auto"
+            onClick={() => setIsSearchModalOpen(false)}
+          >
+            <div
+              className="w-full max-w-md bg-[#0D0207] border-2 border-[#FF1A3C]/80 rounded-2xl p-4 sm:p-5 space-y-3.5 font-mono shadow-[0_0_50px_rgba(255,26,60,0.35)] my-auto shrink-0 z-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-2.5 border-b border-[#FF1A3C]/40">
+                <span className="text-xs font-bold text-[#FFFFFF] flex items-center gap-1.5 tracking-wide">
+                  <Search className="w-4 h-4 text-[#00E5FF]" />
+                  <span>ПОИСК ЛИРИКИ [ LRCLIB ]</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSearchModalOpen(false)}
+                  className="p-1 rounded-lg text-[#883344] hover:text-[#FF1A3C] hover:bg-[#FF1A3C]/10 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div>
-                <label className="text-[10px] text-[#883344] uppercase block mb-0.5">Название трека</label>
-                <input
-                  type="text"
-                  value={searchTitle}
-                  onChange={(e) => setSearchTitle(e.target.value)}
-                  placeholder="Например: Numb"
-                  className="w-full bg-[#16030B] border border-[#FF1A3C]/40 rounded-lg px-2.5 py-1.5 text-xs text-[#E0E0E0] focus:outline-none focus:border-[#00E5FF]"
-                />
-              </div>
-
-              <button
-                onClick={handleExecuteSearch}
-                disabled={isSearching}
-                className="w-full py-2 bg-[#FF1A3C] hover:bg-[#FF2E50] disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-[0_0_10px_rgba(255,26,60,0.4)]"
+              {/* Search Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleExecuteSearch();
+                }}
+                className="space-y-3 text-xs"
               >
-                {isSearching ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Search className="w-3.5 h-3.5" />
-                )}
-                <span>{isSearching ? 'ПОИСК В БАЗЕ...' : 'НАЙТИ В БАЗЕ'}</span>
-              </button>
-            </div>
-
-            {/* Results list */}
-            <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 pt-1 border-t border-[#FF1A3C]/20">
-              {searchResults.length > 0 ? (
-                searchResults.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-2 bg-[#16030B] hover:bg-[#200410] border border-[#FF1A3C]/30 hover:border-[#00E5FF]/60 rounded-lg flex items-center justify-between gap-2 text-xs transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-[#E0E0E0] truncate">{item.trackName}</p>
-                      <p className="text-[10px] text-[#883344] truncate">
-                        {item.artistName} {item.albumName ? `• ${item.albumName}` : ''}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded font-bold border ${
-                          item.syncedLyrics
-                            ? 'bg-[#00E5FF]/20 text-[#00E5FF] border-[#00E5FF]/40'
-                            : 'bg-[#FF1A3C]/20 text-[#FF1A3C] border-[#FF1A3C]/40'
-                        }`}
-                      >
-                        {item.syncedLyrics ? 'LRC СИНХРОН' : 'ТЕКСТ'}
-                      </span>
-
+                <div>
+                  <label className="text-[10px] text-[#883344] font-bold uppercase tracking-wider block mb-1">
+                    Исполнитель
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={searchArtist}
+                      onChange={(e) => setSearchArtist(e.target.value)}
+                      placeholder="Например: Linkin Park"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                      className="w-full bg-[#16030B] border border-[#FF1A3C]/50 rounded-xl px-3 py-2 text-xs text-[#E0E0E0] placeholder-[#552233] focus:outline-none focus:border-[#00E5FF] pr-8 shadow-inner"
+                    />
+                    {searchArtist && (
                       <button
-                        onClick={() => handleApplySearchResult(item)}
-                        className="px-2 py-1 bg-[#FF1A3C]/30 hover:bg-[#FF1A3C] text-white rounded text-[10px] font-bold transition-colors"
+                        type="button"
+                        onClick={() => setSearchArtist('')}
+                        className="absolute right-2 text-[#883344] hover:text-[#FF1A3C] p-1"
                       >
-                        ВЫБРАТЬ
+                        <X className="w-3.5 h-3.5" />
                       </button>
-                    </div>
+                    )}
                   </div>
-                ))
-              ) : isSearching ? (
-                <p className="text-center py-4 text-xs text-[#883344]">Выполняется запрос к LRCLIB...</p>
-              ) : (
-                <p className="text-center py-4 text-xs text-[#883344]">Введите запрос и нажмите «Найти»</p>
-              )}
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-[#883344] font-bold uppercase tracking-wider block mb-1">
+                    Название трека
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={searchTitle}
+                      onChange={(e) => setSearchTitle(e.target.value)}
+                      placeholder="Например: Numb"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                      className="w-full bg-[#16030B] border border-[#FF1A3C]/50 rounded-xl px-3 py-2 text-xs text-[#E0E0E0] placeholder-[#552233] focus:outline-none focus:border-[#00E5FF] pr-8 shadow-inner"
+                    />
+                    {searchTitle && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchTitle('')}
+                        className="absolute right-2 text-[#883344] hover:text-[#FF1A3C] p-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSearching || (!searchArtist.trim() && !searchTitle.trim())}
+                  className="w-full py-2.5 bg-[#FF1A3C] hover:bg-[#FF2E50] disabled:opacity-40 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(255,26,60,0.4)] active:scale-[0.98]"
+                >
+                  {isSearching ? (
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  ) : (
+                    <Search className="w-4 h-4 text-white" />
+                  )}
+                  <span>{isSearching ? 'ПОИСК В БАЗЕ...' : 'НАЙТИ В БАЗЕ'}</span>
+                </button>
+              </form>
+
+              {/* Results list */}
+              <div className="max-h-52 overflow-y-auto space-y-2 pr-1 pt-2 border-t border-[#FF1A3C]/30">
+                {searchResults.length > 0 ? (
+                  searchResults.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-2.5 bg-[#16030B] hover:bg-[#220412] border border-[#FF1A3C]/40 hover:border-[#00E5FF]/70 rounded-xl flex items-center justify-between gap-2.5 text-xs transition-colors shadow-sm"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-[#E0E0E0] truncate">{item.trackName}</p>
+                        <p className="text-[10px] text-[#AA4455] truncate">
+                          {item.artistName} {item.albumName ? `• ${item.albumName}` : ''}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-bold border ${
+                            item.syncedLyrics
+                              ? 'bg-[#00E5FF]/20 text-[#00E5FF] border-[#00E5FF]/50'
+                              : 'bg-[#FF1A3C]/20 text-[#FF1A3C] border-[#FF1A3C]/50'
+                          }`}
+                        >
+                          {item.syncedLyrics ? 'LRC СИНХРОН' : 'ТЕКСТ'}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleApplySearchResult(item)}
+                          className="px-2.5 py-1.5 bg-[#FF1A3C]/40 hover:bg-[#FF1A3C] text-white rounded-lg text-[10px] font-bold transition-all hover:shadow-[0_0_8px_rgba(255,26,60,0.6)]"
+                        >
+                          ВЫБРАТЬ
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : isSearching ? (
+                  <p className="text-center py-5 text-xs text-[#00E5FF] flex items-center justify-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Выполняется запрос к LRCLIB...</span>
+                  </p>
+                ) : (
+                  <p className="text-center py-4 text-xs text-[#662233]">
+                    Введите имя артиста или название трека и нажмите «Найти»
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
