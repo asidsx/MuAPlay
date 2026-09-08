@@ -176,6 +176,17 @@ export default function App() {
   const [isQueueOpen, setIsQueueOpen] = useState<boolean>(false);
   const [isTagEditorOpen, setIsTagEditorOpen] = useState<boolean>(false);
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(() => {
+    return localStorage.getItem('android_music_active_playlist_id') || null;
+  });
+
+  useEffect(() => {
+    if (activePlaylistId) {
+      localStorage.setItem('android_music_active_playlist_id', activePlaylistId);
+    } else {
+      localStorage.removeItem('android_music_active_playlist_id');
+    }
+  }, [activePlaylistId]);
 
   // Sorting & Filtering State
   const [trackSort, setTrackSort] = useState<'default' | 'title' | 'artist' | 'duration'>('default');
@@ -737,6 +748,24 @@ export default function App() {
       setTimeout(() => setFileAlert(null), 2500);
       return;
     }
+
+    // If this playlist is ALREADY active and playing, toggle pause!
+    if (activePlaylistId === playlist.id && isPlaying) {
+      handleTogglePlayPause();
+      setFileAlert(`[ ПАУЗА ] Шард «${playlist.name}» приостановлен`);
+      setTimeout(() => setFileAlert(null), 2000);
+      return;
+    }
+
+    // If this playlist is ALREADY active and paused, resume playback!
+    if (activePlaylistId === playlist.id && !isPlaying && currentTrack && playlist.trackIds.includes(currentTrack.id)) {
+      handleTogglePlayPause();
+      setFileAlert(`[ ВОСПРОИЗВЕДЕНИЕ ] Шард «${playlist.name}» возобновлен`);
+      setTimeout(() => setFileAlert(null), 2000);
+      return;
+    }
+
+    setActivePlaylistId(playlist.id);
 
     let orderedTracks = [...playlistTracks];
     let firstTrack: Track;
@@ -1370,6 +1399,8 @@ export default function App() {
             tracks={tracks}
             currentTrackId={currentTrackId}
             isPlaying={isPlaying}
+            activePlaylistId={activePlaylistId}
+            onTogglePlay={handleTogglePlayPause}
             onPlayTrack={handlePlayTrack}
             onPlayPlaylist={handlePlayPlaylist}
             onCreatePlaylist={handleCreatePlaylist}

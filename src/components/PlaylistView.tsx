@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Plus,
   Play,
+  Pause,
   Trash2,
   ArrowLeft,
   Disc,
@@ -12,6 +13,7 @@ import {
   FileCode,
   Shuffle,
   ListMusic,
+  Activity,
 } from 'lucide-react';
 import { Playlist, Track } from '../types/music';
 import { AddTracksToPlaylistModal } from './AddTracksToPlaylistModal';
@@ -23,6 +25,8 @@ interface PlaylistViewProps {
   tracks: Track[];
   currentTrackId: string | null;
   isPlaying: boolean;
+  activePlaylistId?: string | null;
+  onTogglePlay?: () => void;
   onPlayTrack: (track: Track) => void;
   onPlayPlaylist: (playlist: Playlist, startIndex?: number, shuffle?: boolean) => void;
   onCreatePlaylist: (name: string, description: string) => void;
@@ -37,6 +41,8 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   tracks,
   currentTrackId,
   isPlaying,
+  activePlaylistId,
+  onTogglePlay,
   onPlayTrack,
   onPlayPlaylist,
   onCreatePlaylist,
@@ -74,6 +80,12 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const isSelectedPlaylistActive = selectedPlaylist
+    ? activePlaylistId === selectedPlaylist.id ||
+      (!activePlaylistId && currentTrackId && selectedPlaylist.trackIds.includes(currentTrackId))
+    : false;
+  const isSelectedPlaylistPlaying = isSelectedPlaylistActive && isPlaying;
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 p-3 space-y-3 font-mono">
       {/* Detail View of a Selected Playlist */}
@@ -104,19 +116,47 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
           </div>
 
           {/* Playlist Info Banner */}
-          <div className="py-3 flex items-center gap-3.5 border-b border-[#FF1A3C]/30 shrink-0">
+          <div
+            className={`py-3 flex items-center gap-3.5 border-b rounded-xl p-2.5 my-1 transition-all ${
+              isSelectedPlaylistActive
+                ? 'bg-[#18030B] border-[#FF1A3C] shadow-[0_0_15px_rgba(255,26,60,0.25)]'
+                : 'border-[#FF1A3C]/30'
+            } shrink-0`}
+          >
             <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-[#100308] shadow-lg border border-[#FF1A3C]/50 shrink-0">
               <CyberCoverImage
                 src={selectedPlaylist.coverUrl || getPlaylistTracks(selectedPlaylist)[0]?.coverUrl}
                 alt={selectedPlaylist.name}
                 className="w-full h-full object-cover"
               />
+              {isSelectedPlaylistPlaying && (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
+                  <div className="flex items-end gap-0.5 h-4">
+                    <span className="w-1 bg-[#00E5FF] animate-[pulse_0.6s_ease-in-out_infinite] h-3 rounded-full" />
+                    <span className="w-1 bg-[#FF1A3C] animate-[pulse_0.4s_ease-in-out_infinite] h-4 rounded-full" />
+                    <span className="w-1 bg-[#00E5FF] animate-[pulse_0.8s_ease-in-out_infinite] h-2 rounded-full" />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 min-w-0">
-              <span className="text-[9px] uppercase tracking-wider font-bold text-[#FF1A3C]">
-                [ DATA_SHARD // MEMORY ]
-              </span>
+              <div className="flex items-center gap-1.5">
+                {isSelectedPlaylistPlaying ? (
+                  <span className="text-[9px] uppercase tracking-wider font-bold text-[#00E5FF] flex items-center gap-1">
+                    <Activity className="w-3 h-3 text-[#00E5FF] animate-spin" />
+                    [ АКТИВНОЕ ВОСПРОИЗВЕДЕНИЕ ]
+                  </span>
+                ) : isSelectedPlaylistActive ? (
+                  <span className="text-[9px] uppercase tracking-wider font-bold text-[#FF8095]">
+                    [ НА ПАУЗЕ // ТЕКУЩИЙ ШАРД ]
+                  </span>
+                ) : (
+                  <span className="text-[9px] uppercase tracking-wider font-bold text-[#FF1A3C]">
+                    [ DATA_SHARD // MEMORY ]
+                  </span>
+                )}
+              </div>
               <h3 className="text-sm font-black text-[#FFFFFF] truncate mt-0.5">
                 {selectedPlaylist.name}
               </h3>
@@ -136,17 +176,34 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons: Play All, Shuffle, Add Tracks, Export M3U */}
+          {/* Action Buttons: Play All / Pause, Shuffle, Add Tracks, Export M3U */}
           <div className="py-2.5 flex items-center flex-wrap gap-2 shrink-0">
             {getPlaylistTracks(selectedPlaylist).length > 0 && (
               <>
                 <button
                   onClick={() => onPlayPlaylist(selectedPlaylist, 0, false)}
-                  className="px-3 py-1.5 bg-[#FF1A3C] hover:bg-[#FF0033] text-black rounded-lg font-black text-[10px] sm:text-[11px] flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(255,26,60,0.5)] active:scale-95"
-                  title="Воспроизвести весь плейлист и загрузить его в очередь"
+                  className={`px-3 py-1.5 rounded-lg font-black text-[10px] sm:text-[11px] flex items-center gap-1.5 transition-all active:scale-95 ${
+                    isSelectedPlaylistPlaying
+                      ? 'bg-[#00E5FF] hover:bg-[#33EAFF] text-black shadow-[0_0_15px_rgba(0,229,255,0.6)] ring-1 ring-[#00E5FF]'
+                      : 'bg-[#FF1A3C] hover:bg-[#FF0033] text-black shadow-[0_0_12px_rgba(255,26,60,0.5)]'
+                  }`}
+                  title={
+                    isSelectedPlaylistPlaying
+                      ? 'Приостановить воспроизведение плейлиста'
+                      : 'Воспроизвести весь плейлист и загрузить его в очередь'
+                  }
                 >
-                  <Play className="w-3.5 h-3.5 fill-black" />
-                  <span>СЛУШАТЬ ВСЁ</span>
+                  {isSelectedPlaylistPlaying ? (
+                    <>
+                      <Pause className="w-3.5 h-3.5 fill-black" />
+                      <span>ПАУЗА</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-black" />
+                      <span>СЛУШАТЬ ВСЁ</span>
+                    </>
+                  )}
                 </button>
 
                 <button
@@ -198,22 +255,40 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             ) : (
               getPlaylistTracks(selectedPlaylist).map((track, idx) => {
                 const isCurrent = currentTrackId === track.id;
+                const isTrackPlaying = isCurrent && isPlaying;
                 return (
                   <div
                     key={`${selectedPlaylist.id}-${track.id}-${idx}`}
-                    onClick={() => onPlayPlaylist(selectedPlaylist, idx, false)}
+                    onClick={() => {
+                      if (isCurrent) {
+                        if (onTogglePlay) onTogglePlay();
+                        else onPlayTrack(track);
+                      } else {
+                        onPlayPlaylist(selectedPlaylist, idx, false);
+                      }
+                    }}
                     className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border group ${
                       isCurrent
-                        ? 'bg-[#1A040D] border-[#FF1A3C] shadow-[0_0_10px_rgba(255,26,60,0.3)]'
+                        ? 'bg-[#1A040D] border-[#FF1A3C] shadow-[0_0_10px_rgba(255,26,60,0.3)] ring-1 ring-[#FF1A3C]/40'
                         : 'bg-[#120308] border-[#FF1A3C]/30 hover:border-[#FF1A3C]/60'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                      <span className="text-[9px] font-mono text-[#662233] w-4 text-center shrink-0">
-                        {idx + 1}
+                      <span className="text-[9px] font-mono text-[#662233] w-5 text-center shrink-0 flex items-center justify-center">
+                        {isTrackPlaying ? (
+                          <div className="flex items-end gap-0.5 h-3">
+                            <span className="w-0.5 bg-[#00E5FF] h-2.5 animate-bounce" />
+                            <span className="w-0.5 bg-[#FF1A3C] h-3 animate-pulse" />
+                            <span className="w-0.5 bg-[#00E5FF] h-1.5 animate-bounce delay-75" />
+                          </div>
+                        ) : isCurrent ? (
+                          <Pause className="w-3 h-3 text-[#FF1A3C]" />
+                        ) : (
+                          idx + 1
+                        )}
                       </span>
 
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/30">
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/30 relative">
                         <CyberCoverImage
                           src={track.coverUrl}
                           alt={track.title}
@@ -347,25 +422,50 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             ) : (
               playlists.map((pl) => {
                 const plTracks = getPlaylistTracks(pl);
+                const isThisPlActive =
+                  activePlaylistId === pl.id ||
+                  (!activePlaylistId && currentTrackId && pl.trackIds.includes(currentTrackId));
+                const isThisPlPlaying = isThisPlActive && isPlaying;
+
                 return (
                   <div
                     key={pl.id}
                     onClick={() => setSelectedPlaylistId(pl.id)}
-                    className="bg-[#120308] border border-[#FF1A3C]/35 hover:border-[#FF1A3C] rounded-xl p-3 flex items-center justify-between cursor-pointer transition-all group shadow-sm"
+                    className={`border rounded-xl p-3 flex items-center justify-between cursor-pointer transition-all group shadow-sm ${
+                      isThisPlActive
+                        ? 'bg-[#18030B] border-[#FF1A3C] shadow-[0_0_15px_rgba(255,26,60,0.25)] ring-1 ring-[#FF1A3C]/50'
+                        : 'bg-[#120308] border-[#FF1A3C]/35 hover:border-[#FF1A3C]'
+                    }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#0A0206] border border-[#FF1A3C]/40 shrink-0">
+                      <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-[#0A0206] border border-[#FF1A3C]/40 shrink-0">
                         <CyberCoverImage
                           src={pl.coverUrl || plTracks[0]?.coverUrl}
                           alt={pl.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
+                        {isThisPlPlaying && (
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
+                            <div className="flex items-end gap-0.5 h-3">
+                              <span className="w-0.5 bg-[#00E5FF] h-2.5 animate-bounce" />
+                              <span className="w-0.5 bg-[#FF1A3C] h-3 animate-pulse" />
+                              <span className="w-0.5 bg-[#00E5FF] h-1.5 animate-bounce delay-75" />
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-xs font-black text-white group-hover:text-[#00E5FF] transition-colors truncate">
-                          {pl.name}
-                        </h4>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-black text-white group-hover:text-[#00E5FF] transition-colors truncate">
+                            {pl.name}
+                          </h4>
+                          {isThisPlPlaying && (
+                            <span className="px-1.5 py-0.2 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/50 text-[7px] font-bold animate-pulse">
+                              [ В ЭФИРЕ ]
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-[#883344] truncate mt-0.5">
                           {pl.description || 'Нейро-плейлист'}
                         </p>
@@ -389,10 +489,22 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                         e.stopPropagation();
                         onPlayPlaylist(pl, 0, false);
                       }}
-                      className="w-8 h-8 rounded-lg bg-[#FF1A3C] hover:bg-[#00E5FF] text-black flex items-center justify-center shadow-[0_0_8px_rgba(255,26,60,0.5)] hover:scale-105 transition-all shrink-0"
-                      title="Воспроизвести шард и загрузить очередь"
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0 hover:scale-105 active:scale-95 ${
+                        isThisPlPlaying
+                          ? 'bg-[#00E5FF] hover:bg-[#33EAFF] text-black shadow-[0_0_12px_rgba(0,229,255,0.6)]'
+                          : 'bg-[#FF1A3C] hover:bg-[#00E5FF] text-black shadow-[0_0_8px_rgba(255,26,60,0.5)]'
+                      }`}
+                      title={
+                        isThisPlPlaying
+                          ? 'Приостановить воспроизведение плейлиста'
+                          : 'Воспроизвести шард и загрузить очередь'
+                      }
                     >
-                      <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
+                      {isThisPlPlaying ? (
+                        <Pause className="w-3.5 h-3.5 fill-black" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
+                      )}
                     </button>
                   </div>
                 );
