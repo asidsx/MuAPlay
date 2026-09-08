@@ -1,5 +1,16 @@
-import React from 'react';
-import { ListMusic, Play, Trash2, ArrowUp, ArrowDown, X, Music, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  ListMusic,
+  Play,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  X,
+  GripVertical,
+  Plus,
+  MoveVertical,
+} from 'lucide-react';
+import { Reorder, useDragControls } from 'motion/react';
 import { Track } from '../types/music';
 import { CyberCoverImage } from './CyberCoverImage';
 
@@ -13,8 +24,143 @@ interface QueueModalProps {
   onPlayTrack: (track: Track) => void;
   onRemoveFromQueue: (index: number) => void;
   onMoveQueueItem: (fromIndex: number, toIndex: number) => void;
+  onReorderQueue?: (newQueue: Track[]) => void;
+  onAddToQueue?: (track: Track) => void;
   onClearQueue: () => void;
 }
+
+interface QueueRowProps {
+  track: Track;
+  idx: number;
+  total: number;
+  onPlay: () => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  formatDuration: (sec: number) => string;
+}
+
+const QueueRow: React.FC<QueueRowProps> = ({
+  track,
+  idx,
+  total,
+  onPlay,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  formatDuration,
+}) => {
+  const dragControls = useDragControls();
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  return (
+    <Reorder.Item
+      value={track}
+      id={track.queueId || track.id}
+      dragListener={false}
+      dragControls={dragControls}
+      onDragStart={() => {
+        setIsDragging(true);
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try {
+            navigator.vibrate(25);
+          } catch {
+            // Ignore vibration error if not allowed
+          }
+        }
+      }}
+      onDragEnd={() => {
+        setIsDragging(false);
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try {
+            navigator.vibrate(15);
+          } catch {
+            // Ignore vibration error
+          }
+        }
+      }}
+      className={`relative flex items-center justify-between p-2 rounded-xl transition-all duration-150 select-none ${
+        isDragging
+          ? 'bg-[#220412] border-2 border-[#00E5FF] shadow-[0_0_25px_rgba(0,229,255,0.5)] z-40 scale-[1.02]'
+          : 'bg-[#14030A] border border-[#FF1A3C]/40 hover:border-[#FF1A3C]'
+      }`}
+    >
+      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        {/* Touch & Pointer Drag Handle */}
+        <div
+          onPointerDown={(e) => {
+            dragControls.start(e);
+          }}
+          className="touch-none p-2 -ml-1 text-[#883344] hover:text-[#00E5FF] active:text-[#00E5FF] cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0 rounded-lg hover:bg-[#00E5FF]/10 active:bg-[#00E5FF]/20 transition-colors"
+          title="Зажмите и перетащите пальцем для смены порядка"
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+
+        <span className="text-[9px] text-[#FF1A3C] font-mono font-bold w-4 text-center shrink-0">
+          {idx + 1}
+        </span>
+
+        <div
+          onClick={onPlay}
+          className="relative w-8 h-8 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/30 cursor-pointer group/cover"
+          title="Воспроизвести сейчас"
+        >
+          <CyberCoverImage
+            src={track.coverUrl}
+            alt={track.title}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cover:opacity-100 flex items-center justify-center transition-opacity">
+            <Play className="w-3 h-3 text-white fill-white" />
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1 cursor-pointer pr-1" onClick={onPlay}>
+          <h5 className="text-[11px] font-bold text-white truncate hover:text-[#00E5FF] transition-colors">
+            {track.title}
+          </h5>
+          <p className="text-[8px] text-[#883344] truncate">{track.artist}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-0.5 shrink-0">
+        <span className="text-[8px] font-mono text-[#883344] pr-1 hidden xs:inline">
+          {formatDuration(track.duration)}
+        </span>
+
+        {/* Move Up */}
+        <button
+          onClick={onMoveUp}
+          disabled={idx === 0}
+          className="p-1 text-[#883344] hover:text-[#00E5FF] disabled:opacity-20 transition-colors rounded hover:bg-[#00E5FF]/10"
+          title="Поднять выше"
+        >
+          <ArrowUp className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Move Down */}
+        <button
+          onClick={onMoveDown}
+          disabled={idx === total - 1}
+          className="p-1 text-[#883344] hover:text-[#00E5FF] disabled:opacity-20 transition-colors rounded hover:bg-[#00E5FF]/10"
+          title="Опустить ниже"
+        >
+          <ArrowDown className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Remove from queue */}
+        <button
+          onClick={onRemove}
+          className="p-1 text-[#883344] hover:text-[#FF1A3C] transition-colors rounded hover:bg-[#FF1A3C]/10"
+          title="Удалить из очереди"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </Reorder.Item>
+  );
+};
 
 export const QueueModal: React.FC<QueueModalProps> = ({
   isOpen,
@@ -26,6 +172,8 @@ export const QueueModal: React.FC<QueueModalProps> = ({
   onPlayTrack,
   onRemoveFromQueue,
   onMoveQueueItem,
+  onReorderQueue,
+  onAddToQueue,
   onClearQueue,
 }) => {
   if (!isOpen) return null;
@@ -34,6 +182,22 @@ export const QueueModal: React.FC<QueueModalProps> = ({
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const handleReorder = (newQueue: Track[]) => {
+    if (onReorderQueue) {
+      onReorderQueue(newQueue);
+    } else {
+      // Fallback: update using onMoveQueueItem if onReorderQueue is not provided
+      newQueue.forEach((t, toIdx) => {
+        const fromIdx = userQueue.findIndex(
+          (orig) => (orig.queueId || orig.id) === (t.queueId || t.id)
+        );
+        if (fromIdx !== -1 && fromIdx !== toIdx) {
+          onMoveQueueItem(fromIdx, toIdx);
+        }
+      });
+    }
   };
 
   return (
@@ -50,7 +214,7 @@ export const QueueModal: React.FC<QueueModalProps> = ({
                 <span>[ ОЧЕРЕДЬ // UP_NEXT_QUEUE ]</span>
               </h3>
               <span className="text-[9px] text-[#883344] block">
-                {userQueue.length} в очереди пользователя • {upcomingTracks.length} в автоплейлисте
+                {userQueue.length} в очереди • {upcomingTracks.length} в автоплейлисте
               </span>
             </div>
           </div>
@@ -115,86 +279,54 @@ export const QueueModal: React.FC<QueueModalProps> = ({
             </div>
           )}
 
-          {/* User Priority Queue */}
+          {/* User Priority Queue with Finger Drag & Drop */}
           <div className="space-y-2">
-            <span className="text-[9px] text-[#FF4D6D] uppercase font-bold tracking-wider flex items-center justify-between">
-              <span>ПРИОРИТЕТНАЯ ОЧЕРЕДЬ ({userQueue.length})</span>
-              <span className="text-[8px] text-[#883344]">Сыграют в первую очередь</span>
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] text-[#FF4D6D] uppercase font-bold tracking-wider flex items-center gap-1">
+                <MoveVertical className="w-3 h-3 text-[#FF4D6D]" />
+                <span>ПРИОРИТЕТНАЯ ОЧЕРЕДЬ ({userQueue.length})</span>
+              </span>
+              <span className="text-[8px] text-[#00E5FF]/80 flex items-center gap-0.5">
+                <GripVertical className="w-2.5 h-2.5 inline" />
+                <span>ТЯНИТЕ ПАЛЬЦЕМ ЗА ⋮⋮</span>
+              </span>
+            </div>
 
             {userQueue.length === 0 ? (
-              <div className="py-4 text-center border border-dashed border-[#FF1A3C]/30 rounded-xl bg-[#120308]/40 text-[#883344] text-[10px] space-y-1">
-                <p>[ ОЧЕРЕДЬ ПУСТА ]</p>
-                <p className="text-[8px] text-[#662233]">
-                  Используйте «Играть следующим» или «В очередь» на любом треке
+              <div className="py-5 text-center border border-dashed border-[#FF1A3C]/30 rounded-xl bg-[#120308]/40 text-[#883344] text-[10px] space-y-1.5">
+                <p className="font-bold text-[#FF1A3C]/80">[ ОЧЕРЕДЬ ПУСТА ]</p>
+                <p className="text-[8px] text-[#883344] max-w-xs mx-auto px-4">
+                  Нажмите на значок очереди <span className="text-[#00E5FF]">📋</span> у трека в библиотеке или добавьте из списка ниже
                 </p>
               </div>
             ) : (
-              <div className="space-y-1.5">
+              <Reorder.Group
+                axis="y"
+                values={userQueue}
+                onReorder={handleReorder}
+                className="space-y-1.5 list-none p-0 m-0"
+              >
                 {userQueue.map((track, idx) => (
-                  <div
-                    key={`${track.id}-${idx}`}
-                    className="flex items-center justify-between p-2 bg-[#14030A] border border-[#FF1A3C]/40 rounded-xl hover:border-[#FF1A3C] transition-all group"
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-[9px] text-[#FF1A3C] font-mono font-bold w-4 text-center shrink-0">
-                        {idx + 1}
-                      </span>
-                      <div className="relative w-8 h-8 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/30">
-                        <CyberCoverImage
-                          src={track.coverUrl}
-                          alt={track.title}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h5 className="text-[11px] font-bold text-white truncate">
-                          {track.title}
-                        </h5>
-                        <p className="text-[8px] text-[#883344] truncate">{track.artist}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      {/* Move Up */}
-                      <button
-                        onClick={() => onMoveQueueItem(idx, Math.max(0, idx - 1))}
-                        disabled={idx === 0}
-                        className="p-1 text-[#883344] hover:text-[#00E5FF] disabled:opacity-20 transition-colors"
-                        title="Поднять выше"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Move Down */}
-                      <button
-                        onClick={() => onMoveQueueItem(idx, Math.min(userQueue.length - 1, idx + 1))}
-                        disabled={idx === userQueue.length - 1}
-                        className="p-1 text-[#883344] hover:text-[#00E5FF] disabled:opacity-20 transition-colors"
-                        title="Опустить ниже"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Remove from queue */}
-                      <button
-                        onClick={() => onRemoveFromQueue(idx)}
-                        className="p-1 text-[#883344] hover:text-[#FF1A3C] transition-colors"
-                        title="Удалить из очереди"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                  <QueueRow
+                    key={track.queueId || `${track.id}-${idx}`}
+                    track={track}
+                    idx={idx}
+                    total={userQueue.length}
+                    onPlay={() => onPlayTrack(track)}
+                    onRemove={() => onRemoveFromQueue(idx)}
+                    onMoveUp={() => onMoveQueueItem(idx, Math.max(0, idx - 1))}
+                    onMoveDown={() => onMoveQueueItem(idx, Math.min(userQueue.length - 1, idx + 1))}
+                    formatDuration={formatDuration}
+                  />
                 ))}
-              </div>
+              </Reorder.Group>
             )}
           </div>
 
           {/* Upcoming Playlist / Library Tracks */}
-          <div className="space-y-2">
+          <div className="space-y-2 pt-1 border-t border-[#FF1A3C]/20">
             <span className="text-[9px] text-[#883344] uppercase font-bold tracking-wider block">
-              ДАЛЕЕ ИЗ ПЛЕЙЛИСТА / МЕДИАТЕКИ ({upcomingTracks.length})
+              ДАЛЕЕ ИЗ ТЕКУЩЕГО СПИСКА ({upcomingTracks.length})
             </span>
 
             {upcomingTracks.length === 0 ? (
@@ -206,15 +338,17 @@ export const QueueModal: React.FC<QueueModalProps> = ({
                 {upcomingTracks.slice(0, 15).map((track, idx) => (
                   <div
                     key={`up-${track.id}-${idx}`}
-                    onClick={() => onPlayTrack(track)}
-                    className="flex items-center justify-between p-1.5 px-2 bg-[#0F0207] hover:bg-[#18040C] border border-transparent hover:border-[#FF1A3C]/30 rounded-lg cursor-pointer transition-colors"
+                    className="flex items-center justify-between p-1.5 px-2 bg-[#0F0207] hover:bg-[#18040C] border border-transparent hover:border-[#FF1A3C]/30 rounded-lg transition-colors group"
                   >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div
+                      onClick={() => onPlayTrack(track)}
+                      className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
+                    >
                       <span className="text-[8px] text-[#552233] font-mono w-4 shrink-0">
                         +{idx + 1}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <span className="text-[11px] text-[#CCC] font-medium truncate block">
+                        <span className="text-[11px] text-[#CCC] font-medium truncate block group-hover:text-white">
                           {track.title}
                         </span>
                         <span className="text-[8px] text-[#662233] truncate block">
@@ -225,7 +359,25 @@ export const QueueModal: React.FC<QueueModalProps> = ({
 
                     <div className="flex items-center gap-1.5 text-[8px] text-[#662233] font-mono shrink-0">
                       <span>{formatDuration(track.duration)}</span>
-                      <Play className="w-3 h-3 text-[#883344] hover:text-[#FF1A3C]" />
+                      {onAddToQueue && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAddToQueue(track);
+                          }}
+                          className="p-1 rounded text-[#883344] hover:text-[#00E5FF] hover:bg-[#00E5FF]/10 transition-colors"
+                          title="Добавить в приоритетную очередь"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onPlayTrack(track)}
+                        className="p-1 rounded text-[#883344] hover:text-[#FF1A3C] transition-colors"
+                        title="Воспроизвести прямо сейчас"
+                      >
+                        <Play className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -235,7 +387,10 @@ export const QueueModal: React.FC<QueueModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="pt-2 border-t border-[#FF1A3C]/30 flex justify-end shrink-0">
+        <div className="pt-2 border-t border-[#FF1A3C]/30 flex items-center justify-between shrink-0">
+          <span className="text-[8px] text-[#662233] font-mono hidden sm:inline">
+            [ HAPTIC TOUCH REORDER ACTIVE ]
+          </span>
           <button
             onClick={onClose}
             className="w-full sm:w-auto px-4 py-2 bg-[#FF1A3C] hover:bg-[#FF0033] text-black font-black rounded-xl text-xs shadow-[0_0_15px_rgba(255,26,60,0.5)] transition-all"

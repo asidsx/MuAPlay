@@ -24,6 +24,7 @@ export interface Track {
   genre?: string;
   lyrics?: string;
   isFavorite?: boolean;
+  queueId?: string; // unique identifier for queue instances
   addedAt: number; // timestamp
 }
 

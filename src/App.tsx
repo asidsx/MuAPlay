@@ -143,7 +143,11 @@ export default function App() {
     const saved = localStorage.getItem('android_music_user_queue');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed: Track[] = JSON.parse(saved);
+        return parsed.map((t, idx) => ({
+          ...t,
+          queueId: t.queueId || `q-${t.id || 'track'}-${Date.now()}-${idx}`,
+        }));
       } catch {
         return [];
       }
@@ -312,14 +316,22 @@ export default function App() {
   // Queue and Tag Helper Functions
   const handleAddToQueue = (track: Track, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setUserQueue((prev) => [...prev, track]);
+    const queueItem: Track = {
+      ...track,
+      queueId: `q-${track.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setUserQueue((prev) => [...prev, queueItem]);
     setFileAlert(`[ +ОЧЕРЕДЬ ] «${track.title}» добавлен в очередь`);
     setTimeout(() => setFileAlert(null), 2000);
   };
 
   const handlePlayNext = (track: Track, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setUserQueue((prev) => [track, ...prev]);
+    const queueItem: Track = {
+      ...track,
+      queueId: `q-${track.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setUserQueue((prev) => [queueItem, ...prev]);
     setFileAlert(`[ СЛЕДУЮЩИЙ ] «${track.title}» сыграет первым`);
     setTimeout(() => setFileAlert(null), 2000);
   };
@@ -335,6 +347,10 @@ export default function App() {
       copy.splice(toIndex, 0, moved);
       return copy;
     });
+  };
+
+  const handleReorderQueue = (newQueue: Track[]) => {
+    setUserQueue(newQueue);
   };
 
   const handleClearQueue = () => {
@@ -1527,6 +1543,8 @@ export default function App() {
         onPlayTrack={(t) => handlePlayTrack(t)}
         onRemoveFromQueue={handleRemoveFromQueue}
         onMoveQueueItem={handleMoveQueueItem}
+        onReorderQueue={handleReorderQueue}
+        onAddToQueue={handleAddToQueue}
         onClearQueue={handleClearQueue}
       />
 
