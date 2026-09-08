@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, Play, Trash2, FolderPlus, ArrowLeft, Disc, Music2, Cpu } from 'lucide-react';
+import { Plus, Play, Trash2, FolderPlus, ArrowLeft, Disc, Music2, Cpu, Download, Upload, FileCode } from 'lucide-react';
 import { Playlist, Track, ScannedFile } from '../types/music';
 import { AddTracksToPlaylistModal } from './AddTracksToPlaylistModal';
+import { downloadM3UFile, parseM3U, downloadLibraryBackup } from '../services/playlistExport';
 
 interface PlaylistViewProps {
   playlists: Playlist[];
@@ -13,6 +14,7 @@ interface PlaylistViewProps {
   onDeletePlaylist: (id: string) => void;
   onAddTracksToPlaylist: (playlistId: string, selectedFiles: ScannedFile[]) => void;
   onRemoveTrackFromPlaylist: (playlistId: string, trackId: string) => void;
+  onImportPlaylist?: (name: string, trackIds: string[]) => void;
   availableDownloads: ScannedFile[];
   onRescanDownloads: () => void;
   isScanning: boolean;
@@ -28,6 +30,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   onDeletePlaylist,
   onAddTracksToPlaylist,
   onRemoveTrackFromPlaylist,
+  onImportPlaylist,
   availableDownloads,
   onRescanDownloads,
   isScanning,
@@ -111,14 +114,23 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             </div>
           </div>
 
-          {/* Action Button: Add tracks to playlist */}
-          <div className="py-2 flex items-center justify-between">
+          {/* Action Buttons: Add tracks & Export M3U */}
+          <div className="py-2 flex items-center justify-between gap-2">
             <button
               onClick={() => setIsAddTracksModalOpen(true)}
               className="px-3 py-1.5 bg-[#FF1A3C] hover:bg-[#FF0033] text-black rounded-lg font-black text-[11px] flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(255,26,60,0.5)] active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>ЗАГРУЗИТЬ В ШАРД</span>
+            </button>
+
+            <button
+              onClick={() => downloadM3UFile(selectedPlaylist, tracks)}
+              className="px-2.5 py-1.5 bg-[#18040C] hover:bg-[#250412] text-[#00E5FF] border border-[#00E5FF]/40 hover:border-[#00E5FF] rounded-lg font-bold text-[10px] flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              title="Экспортировать плейлист в файл .m3u8"
+            >
+              <Download className="w-3.5 h-3.5 text-[#00E5FF]" />
+              <span>ЭКСПОРТ .M3U</span>
             </button>
           </div>
 
@@ -184,13 +196,65 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
               </p>
             </div>
 
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-2.5 py-1 bg-[#FF1A3C] hover:bg-[#FF0033] text-black rounded-lg font-black text-[10px] flex items-center gap-1 transition-all shadow-[0_0_8px_rgba(255,26,60,0.5)] active:scale-95"
-            >
-              <Plus className="w-3 h-3" />
-              <span>СОЗДАТЬ ШАРД</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <label
+                className="px-2 py-1 bg-[#18040C] hover:bg-[#250412] text-[#00E5FF] border border-[#00E5FF]/40 hover:border-[#00E5FF] rounded-lg font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                title="Импортировать плейлист из файла .m3u / .m3u8"
+              >
+                <Upload className="w-3 h-3 text-[#00E5FF]" />
+                <span>ИМПОРТ .M3U</span>
+                <input
+                  type="file"
+                  accept=".m3u,.m3u8"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      const text = event.target?.result as string;
+                      if (text) {
+                        const parsed = parseM3U(text);
+                        // match track IDs
+                        const matchedIds: string[] = [];
+                        parsed.entries.forEach((entry) => {
+                          const match = tracks.find(
+                            (t) =>
+                              t.title.toLowerCase() === entry.title.toLowerCase() ||
+                              (entry.artist && t.artist.toLowerCase() === entry.artist.toLowerCase()) ||
+                              (t.filePath && t.filePath.includes(entry.filename))
+                          );
+                          if (match) matchedIds.push(match.id);
+                        });
+                        if (onImportPlaylist) {
+                          onImportPlaylist(parsed.name, matchedIds);
+                        } else {
+                          onCreatePlaylist(parsed.name, `Импортировано из ${file.name}`);
+                        }
+                      }
+                    };
+                    reader.readAsText(file);
+                  }}
+                />
+              </label>
+
+              <button
+                onClick={() => downloadLibraryBackup(tracks, playlists)}
+                className="px-2 py-1 bg-[#18040C] hover:bg-[#250412] text-[#FF8095] border border-[#FF1A3C]/30 hover:border-[#FF1A3C] rounded-lg font-bold text-[9px] flex items-center gap-1 transition-all active:scale-95"
+                title="Экспортировать полную резервную копию библиотеки (JSON)"
+              >
+                <FileCode className="w-3 h-3 text-[#FF1A3C]" />
+                <span>БЭКАП</span>
+              </button>
+
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-2.5 py-1 bg-[#FF1A3C] hover:bg-[#FF0033] text-black rounded-lg font-black text-[10px] flex items-center gap-1 transition-all shadow-[0_0_8px_rgba(255,26,60,0.5)] active:scale-95"
+              >
+                <Plus className="w-3 h-3" />
+                <span>СОЗДАТЬ</span>
+              </button>
+            </div>
           </div>
 
           {/* Grid/List of Playlists */}

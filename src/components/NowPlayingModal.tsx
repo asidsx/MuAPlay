@@ -20,6 +20,9 @@ import {
   Unlock,
   ChevronLeft,
   ChevronRight,
+  Moon,
+  ListMusic,
+  Edit3,
 } from 'lucide-react';
 import { Track, RepeatMode } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
@@ -50,6 +53,11 @@ interface NowPlayingModalProps {
   onOpenEQ: () => void;
   onLockScreen?: () => void;
   onUpdateLyrics?: (trackId: string, lyrics: string) => void;
+  onOpenSleepTimer?: () => void;
+  onOpenQueue?: () => void;
+  onOpenTagEditor?: () => void;
+  sleepTimerRemaining?: string | null;
+  queueCount?: number;
 }
 
 export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
@@ -74,6 +82,11 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
   onOpenEQ,
   onLockScreen,
   onUpdateLyrics,
+  onOpenSleepTimer,
+  onOpenQueue,
+  onOpenTagEditor,
+  sleepTimerRemaining,
+  queueCount = 0,
 }) => {
   const [activeTab, setActiveTab] = useState<'cover' | 'lyrics' | 'details'>('cover');
   const [isMuted, setIsMuted] = useState(false);
@@ -197,7 +210,58 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-1.5">
+          {/* Sleep Timer */}
+          {onOpenSleepTimer && (
+            <button
+              onClick={onOpenSleepTimer}
+              className={`relative p-2 rounded-lg border transition-all ${
+                sleepTimerRemaining
+                  ? 'bg-[#00E5FF]/20 text-[#00E5FF] border-[#00E5FF] shadow-[0_0_10px_rgba(0,229,255,0.5)]'
+                  : 'bg-[#150308] border-[#FF1A3C]/40 text-[#883344] hover:text-[#00E5FF] hover:border-[#00E5FF]/50'
+              }`}
+              title={sleepTimerRemaining ? `Таймер сна активен: ${sleepTimerRemaining}` : 'Установить таймер сна'}
+            >
+              <Moon className="w-4 h-4" />
+              {sleepTimerRemaining && (
+                <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded text-[7px] font-mono font-black bg-[#00E5FF] text-black shadow-sm">
+                  {sleepTimerRemaining}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Queue / Up Next */}
+          {onOpenQueue && (
+            <button
+              onClick={onOpenQueue}
+              className={`relative p-2 rounded-lg border transition-all ${
+                queueCount > 0
+                  ? 'bg-[#FF1A3C]/20 text-[#FF1A3C] border-[#FF1A3C] shadow-[0_0_10px_rgba(255,26,60,0.5)]'
+                  : 'bg-[#150308] border-[#FF1A3C]/40 text-[#883344] hover:text-white hover:border-[#FF1A3C]/50'
+              }`}
+              title="Очередь воспроизведения"
+            >
+              <ListMusic className="w-4 h-4" />
+              {queueCount > 0 && (
+                <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded text-[7px] font-mono font-black bg-[#FF1A3C] text-black shadow-sm">
+                  {queueCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* ID3 Tag Editor */}
+          {onOpenTagEditor && (
+            <button
+              onClick={onOpenTagEditor}
+              className="p-2 rounded-lg bg-[#150308] border border-[#FF1A3C]/40 text-[#883344] hover:text-[#00E5FF] hover:border-[#00E5FF]/50 transition-colors"
+              title="Редактировать ID3-теги трека"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Touch Lock Toggle */}
           <button
             onClick={() => setIsTouchLocked(!isTouchLocked)}
@@ -212,7 +276,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
                 : 'Заблокировать управление (защита от нажатий в кармане)'
             }
           >
-            {isTouchLocked ? <Lock className="w-5 h-5 fill-black" /> : <Lock className="w-5 h-5" />}
+            {isTouchLocked ? <Lock className="w-4 h-4 fill-black" /> : <Lock className="w-4 h-4" />}
           </button>
 
           <button
@@ -220,7 +284,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
             className="p-2 rounded-lg bg-[#150308] border border-[#00E5FF]/50 text-[#00E5FF] hover:border-[#00E5FF] hover:shadow-[0_0_10px_rgba(0,229,255,0.4)] transition-colors"
             title="Открыть DSP Эквалайзер"
           >
-            <Sliders className="w-5 h-5" />
+            <Sliders className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>

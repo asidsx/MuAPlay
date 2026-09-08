@@ -22,6 +22,12 @@ import {
   Disc,
   FileText,
   Lock,
+  Moon,
+  ListMusic,
+  Edit3,
+  CornerDownRight,
+  ArrowDownUp,
+  Filter,
 } from 'lucide-react';
 import { Track, Playlist, ScannedFile, RepeatMode } from './types/music';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS, DOWNLOADS_FOLDER_FILES } from './data/sampleTracks';
@@ -42,6 +48,16 @@ import { EqualizerView } from './components/EqualizerView';
 import { CyberLockscreen } from './components/CyberLockscreen';
 import { CyberCoverImage } from './components/CyberCoverImage';
 import { getAudioBlob, getCoverCache, saveCoverCache } from './services/audioStorage';
+import { sleepTimer, SleepTimerState } from './services/sleepTimer';
+import { SleepTimerModal } from './components/SleepTimerModal';
+import { QueueModal } from './components/QueueModal';
+import { TagEditorModal } from './components/TagEditorModal';
+import {
+  initMediaSession,
+  updateMediaSessionMetadata,
+  updateMediaSessionPlaybackState,
+  updateMediaSessionPositionState,
+} from './services/mediaSession';
 
 export default function App() {
   // Navigation State
@@ -114,13 +130,52 @@ export default function App() {
     });
   };
 
-  // Modals
+  // Modals & Tools
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
   const [isScanningDownloads, setIsScanningDownloads] = useState<boolean>(false);
   const [isFetchingCovers, setIsFetchingCovers] = useState<boolean>(false);
   const [isFetchingLyrics, setIsFetchingLyrics] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [fileAlert, setFileAlert] = useState<string | null>(null);
+
+  // User Priority Queue State (Up Next)
+  const [userQueue, setUserQueue] = useState<Track[]>(() => {
+    const saved = localStorage.getItem('android_music_user_queue');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('android_music_user_queue', JSON.stringify(userQueue));
+  }, [userQueue]);
+
+  // Sleep Timer State & Subscriptions
+  const [isSleepTimerOpen, setIsSleepTimerOpen] = useState<boolean>(false);
+  const [sleepTimerState, setSleepTimerState] = useState<SleepTimerState>(sleepTimer.state);
+
+  useEffect(() => {
+    sleepTimer.setPauseHandler(() => {
+      setIsPlaying(false);
+      audioEngine.pauseTrack();
+    });
+    const unsub = sleepTimer.subscribe((st) => setSleepTimerState({ ...st }));
+    return unsub;
+  }, []);
+
+  // Queue Modal & Tag Editor Modal State
+  const [isQueueOpen, setIsQueueOpen] = useState<boolean>(false);
+  const [isTagEditorOpen, setIsTagEditorOpen] = useState<boolean>(false);
+  const [editingTrack, setEditingTrack] = useState<Track | null>(null);
+
+  // Sorting & Filtering State
+  const [trackSort, setTrackSort] = useState<'default' | 'title' | 'artist' | 'duration'>('default');
+  const [trackFilter, setTrackFilter] = useState<'all' | 'flac' | 'favorites'>('all');
 
   // Persist State to LocalStorage
   useEffect(() => {
@@ -188,6 +243,12 @@ export default function App() {
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
     const handleLoadedMetadata = () => setDuration(audio.duration || 180);
     const handleEnded = () => {
+      // Sleep Timer check: pause if set to stop at end of track
+      if (sleepTimer.handleTrackEnded()) {
+        setIsPlaying(false);
+        return;
+      }
+
       if (repeatMode === 'one' && currentTrack) {
         audioEngine.seek(0);
         audioEngine.resumeTrack();
@@ -195,14 +256,17 @@ export default function App() {
         handleNextTrack();
       } else {
         // repeatMode === 'off'
-        // Only advance if not at the very end of the playlist; otherwise stop
-        const activeId = currentTrackId || currentTrack?.id;
-        const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : -1;
-        if (currentIndex !== -1 && currentIndex < tracks.length - 1) {
+        if (userQueue.length > 0) {
           handleNextTrack();
         } else {
-          setIsPlaying(false);
-          audioEngine.pauseTrack();
+          const activeId = currentTrackId || currentTrack?.id;
+          const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : -1;
+          if (currentIndex !== -1 && currentIndex < tracks.length - 1) {
+            handleNextTrack();
+          } else {
+            setIsPlaying(false);
+            audioEngine.pauseTrack();
+          }
         }
       }
     };
@@ -216,7 +280,93 @@ export default function App() {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [currentTrackId, repeatMode, isShuffle, currentTrack, tracks]);
+  }, [currentTrackId, repeatMode, isShuffle, currentTrack, tracks, userQueue]);
+
+  // MediaSession API Integration (Lockscreen, Notification & Bluetooth Remote)
+  useEffect(() => {
+    initMediaSession({
+      onPlay: () => {
+        if (!isPlaying) handleTogglePlayPause();
+      },
+      onPause: () => {
+        if (isPlaying) handleTogglePlayPause();
+      },
+      onNext: () => handleNextTrack(),
+      onPrev: () => handlePrevTrack(),
+      onSeek: (sec) => handleSeek(sec),
+    });
+  }, [isPlaying, currentTrack, tracks, userQueue, isShuffle, currentTime]);
+
+  useEffect(() => {
+    updateMediaSessionMetadata(currentTrack);
+  }, [currentTrack]);
+
+  useEffect(() => {
+    updateMediaSessionPlaybackState(isPlaying);
+  }, [isPlaying]);
+
+  useEffect(() => {
+    updateMediaSessionPositionState(currentTime, duration);
+  }, [currentTime, duration]);
+
+  // Queue and Tag Helper Functions
+  const handleAddToQueue = (track: Track, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setUserQueue((prev) => [...prev, track]);
+    setFileAlert(`[ +ОЧЕРЕДЬ ] «${track.title}» добавлен в очередь`);
+    setTimeout(() => setFileAlert(null), 2000);
+  };
+
+  const handlePlayNext = (track: Track, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setUserQueue((prev) => [track, ...prev]);
+    setFileAlert(`[ СЛЕДУЮЩИЙ ] «${track.title}» сыграет первым`);
+    setTimeout(() => setFileAlert(null), 2000);
+  };
+
+  const handleRemoveFromQueue = (index: number) => {
+    setUserQueue((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMoveQueueItem = (fromIndex: number, toIndex: number) => {
+    setUserQueue((prev) => {
+      const copy = [...prev];
+      const [moved] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, moved);
+      return copy;
+    });
+  };
+
+  const handleClearQueue = () => {
+    setUserQueue([]);
+  };
+
+  const handleOpenTagEditor = (track?: Track, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingTrack(track || currentTrack || null);
+    setIsTagEditorOpen(true);
+  };
+
+  const handleSaveEditedTrack = (updated: Track) => {
+    setTracks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    setUserQueue((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    setFileAlert(`[ ID3 ] Теги «${updated.title}» успешно обновлены`);
+    setTimeout(() => setFileAlert(null), 2000);
+  };
+
+  const handleImportPlaylist = (name: string, trackIds: string[]) => {
+    const newPlaylist: Playlist = {
+      id: `pl-${Date.now()}`,
+      name,
+      description: `Импортированный M3U плейлист`,
+      trackIds,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    setPlaylists((prev) => [newPlaylist, ...prev]);
+    setFileAlert(`Плейлист «${name}» успешно импортирован (${trackIds.length} треков)`);
+    setTimeout(() => setFileAlert(null), 2500);
+  };
 
   // Audio Controls
   const getPlayableUrl = async (track: Track): Promise<string | null> => {
@@ -331,6 +481,14 @@ export default function App() {
   };
 
   const handleNextTrack = () => {
+    // If user has queued tracks, play the next queued item
+    if (userQueue.length > 0) {
+      const nextFromQueue = userQueue[0];
+      setUserQueue((prev) => prev.slice(1));
+      handlePlayTrack(nextFromQueue);
+      return;
+    }
+
     if (tracks.length === 0) return;
     let nextIndex = 0;
     const activeId = currentTrackId || currentTrack?.id;
@@ -842,16 +1000,35 @@ export default function App() {
     setIsFetchingLyrics(false);
   };
 
-  // Filtered tracks for Search
-  const filteredTracks = tracks.filter((t) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      t.title.toLowerCase().includes(q) ||
-      t.artist.toLowerCase().includes(q) ||
-      t.album.toLowerCase().includes(q) ||
-      t.hiResInfo.format.toLowerCase().includes(q)
-    );
-  });
+  // Filtered & Sorted tracks for Media Library
+  const processedTracks = tracks
+    .filter((t) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !q ||
+        t.title.toLowerCase().includes(q) ||
+        t.artist.toLowerCase().includes(q) ||
+        t.album.toLowerCase().includes(q) ||
+        t.hiResInfo.format.toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+
+      if (trackFilter === 'flac') {
+        return t.hiResInfo.isLossless || t.hiResInfo.format.toUpperCase() === 'FLAC';
+      }
+      if (trackFilter === 'favorites') {
+        return t.isFavorite;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (trackSort === 'title') return a.title.localeCompare(b.title);
+      if (trackSort === 'artist') return a.artist.localeCompare(b.artist);
+      if (trackSort === 'duration') return b.duration - a.duration;
+      return 0;
+    });
+
+  const filteredTracks = processedTracks;
 
   const favoriteTracks = tracks.filter((t) => t.isFavorite);
 
@@ -968,6 +1145,44 @@ export default function App() {
               </div>
             </div>
 
+            {/* Filter & Sort Controls Bar */}
+            <div className="flex items-center justify-between gap-1.5 pb-1 shrink-0 overflow-x-auto text-[9px]">
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-[#883344] font-bold uppercase hidden sm:inline">ФИЛЬТР:</span>
+                {[
+                  { id: 'all', label: 'ВСЕ' },
+                  { id: 'flac', label: 'HI-RES' },
+                  { id: 'favorites', label: 'ИЗБРАННОЕ' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setTrackFilter(f.id as any)}
+                    className={`px-2 py-0.5 rounded-md border text-[9px] transition-all font-bold ${
+                      trackFilter === f.id
+                        ? 'bg-[#FF1A3C] text-black border-[#FF1A3C] shadow-[0_0_8px_rgba(255,26,60,0.6)]'
+                        : 'bg-[#120308] text-[#883344] border-[#FF1A3C]/30 hover:text-white'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0 ml-auto">
+                <ArrowDownUp className="w-3 h-3 text-[#00E5FF]" />
+                <select
+                  value={trackSort}
+                  onChange={(e) => setTrackSort(e.target.value as any)}
+                  className="bg-[#120308] border border-[#00E5FF]/40 text-[#00E5FF] rounded px-1.5 py-0.5 text-[9px] font-bold focus:outline-none"
+                >
+                  <option value="default">СОРТИРОВКА: СТАНДАРТ</option>
+                  <option value="title">НАЗВАНИЕ (А-Я)</option>
+                  <option value="artist">ИСПОЛНИТЕЛЬ</option>
+                  <option value="duration">ДЛИТЕЛЬНОСТЬ</option>
+                </select>
+              </div>
+            </div>
+
             {/* Track List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {filteredTracks.length === 0 ? (
@@ -1066,7 +1281,31 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          onClick={(e) => handlePlayNext(track, e)}
+                          className="p-1 text-[#882233] hover:text-[#00E5FF] hover:bg-[#00E5FF]/10 rounded transition-colors"
+                          title="Воспроизвести следующим"
+                        >
+                          <CornerDownRight className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={(e) => handleAddToQueue(track, e)}
+                          className="p-1 text-[#882233] hover:text-[#00E5FF] hover:bg-[#00E5FF]/10 rounded transition-colors"
+                          title="Добавить в очередь"
+                        >
+                          <ListMusic className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={(e) => handleOpenTagEditor(track, e)}
+                          className="p-1 text-[#882233] hover:text-[#FF1A3C] hover:bg-[#FF1A3C]/10 rounded transition-colors"
+                          title="Редактировать ID3 теги"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1082,7 +1321,7 @@ export default function App() {
                           />
                         </button>
 
-                        <span className="text-[9px] font-mono text-[#883344] px-1">
+                        <span className="text-[9px] font-mono text-[#883344] px-1 hidden xs:inline">
                           {formatDuration(track.duration)}
                         </span>
 
@@ -1114,6 +1353,7 @@ export default function App() {
             onDeletePlaylist={handleDeletePlaylist}
             onAddTracksToPlaylist={handleAddTracksToPlaylist}
             onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
+            onImportPlaylist={handleImportPlaylist}
             availableDownloads={downloadFiles}
             onRescanDownloads={handleScanDownloadsFolder}
             isScanning={isScanningDownloads}
@@ -1256,6 +1496,49 @@ export default function App() {
           setIsLockscreenOpen(true);
         }}
         onUpdateLyrics={handleUpdateTrackLyrics}
+        onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
+        onOpenQueue={() => setIsQueueOpen(true)}
+        onOpenTagEditor={() => handleOpenTagEditor(currentTrack || undefined)}
+        sleepTimerRemaining={
+          sleepTimerState.isActive
+            ? sleepTimerState.mode === 'end_of_track'
+              ? 'КОНЕЦ'
+              : `${Math.ceil(sleepTimerState.remainingSeconds / 60)}м`
+            : null
+        }
+        queueCount={userQueue.length}
+      />
+
+      {/* Sleep Timer Modal */}
+      <SleepTimerModal
+        isOpen={isSleepTimerOpen}
+        onClose={() => setIsSleepTimerOpen(false)}
+        currentVolume={volume}
+      />
+
+      {/* Up Next / Queue Modal */}
+      <QueueModal
+        isOpen={isQueueOpen}
+        onClose={() => setIsQueueOpen(false)}
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        userQueue={userQueue}
+        upcomingTracks={tracks.filter((t) => t.id !== (currentTrackId || currentTrack?.id))}
+        onPlayTrack={(t) => handlePlayTrack(t)}
+        onRemoveFromQueue={handleRemoveFromQueue}
+        onMoveQueueItem={handleMoveQueueItem}
+        onClearQueue={handleClearQueue}
+      />
+
+      {/* ID3 Tag Editor Modal */}
+      <TagEditorModal
+        isOpen={isTagEditorOpen}
+        track={editingTrack}
+        onClose={() => {
+          setIsTagEditorOpen(false);
+          setEditingTrack(null);
+        }}
+        onSave={handleSaveEditedTrack}
       />
 
       {/* Cyberpunk Smartphone Lock Screen Widget */}
