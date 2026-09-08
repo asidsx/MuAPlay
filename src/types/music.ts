@@ -1,4 +1,5 @@
 export type AudioFormatType = 'FLAC' | 'WAV' | 'MP3' | 'M4A' | 'AAC' | 'OGG' | 'OPUS' | 'ALAC';
+export type RepeatMode = 'off' | 'all' | 'one';
 
 export interface HiResInfo {
   format: AudioFormatType;

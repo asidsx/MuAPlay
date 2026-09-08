@@ -23,7 +23,7 @@ import {
   FileText,
   Lock,
 } from 'lucide-react';
-import { Track, Playlist, ScannedFile } from './types/music';
+import { Track, Playlist, ScannedFile, RepeatMode } from './types/music';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS, DOWNLOADS_FOLDER_FILES } from './data/sampleTracks';
 import { audioEngine } from './services/audioEngine';
 import { parseAudioFileMetadata, fetchMissingAlbumArt, isSupportedAudioFile, ACCEPT_AUDIO_INPUT_ATTR } from './services/metadataScanner';
@@ -96,7 +96,23 @@ export default function App() {
   const [duration, setDuration] = useState<number>(184);
   const [volume, setVolume] = useState<number>(0.8);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
-  const [isRepeat, setIsRepeat] = useState<boolean>(false);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>(() => {
+    const saved = localStorage.getItem('android_music_repeat_mode');
+    if (saved === 'off' || saved === 'all' || saved === 'one') {
+      return saved as RepeatMode;
+    }
+    return 'all';
+  });
+
+  const isRepeat = repeatMode !== 'off';
+
+  const handleCycleRepeatMode = () => {
+    setRepeatMode((prev) => {
+      const next: RepeatMode = prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off';
+      localStorage.setItem('android_music_repeat_mode', next);
+      return next;
+    });
+  };
 
   // Modals
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
@@ -172,11 +188,22 @@ export default function App() {
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
     const handleLoadedMetadata = () => setDuration(audio.duration || 180);
     const handleEnded = () => {
-      if (isRepeat && currentTrack) {
+      if (repeatMode === 'one' && currentTrack) {
         audioEngine.seek(0);
         audioEngine.resumeTrack();
-      } else {
+      } else if (repeatMode === 'all') {
         handleNextTrack();
+      } else {
+        // repeatMode === 'off'
+        // Only advance if not at the very end of the playlist; otherwise stop
+        const activeId = currentTrackId || currentTrack?.id;
+        const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : -1;
+        if (currentIndex !== -1 && currentIndex < tracks.length - 1) {
+          handleNextTrack();
+        } else {
+          setIsPlaying(false);
+          audioEngine.pauseTrack();
+        }
       }
     };
 
@@ -189,7 +216,7 @@ export default function App() {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [currentTrackId, isRepeat, isShuffle, currentTrack]);
+  }, [currentTrackId, repeatMode, isShuffle, currentTrack, tracks]);
 
   // Audio Controls
   const getPlayableUrl = async (track: Track): Promise<string | null> => {
@@ -1211,13 +1238,14 @@ export default function App() {
         volume={volume}
         isShuffle={isShuffle}
         isRepeat={isRepeat}
+        repeatMode={repeatMode}
         onPlayPause={handleTogglePlayPause}
         onNext={handleNextTrack}
         onPrev={handlePrevTrack}
         onSeek={handleSeek}
         onVolumeChange={handleVolumeChange}
         onToggleShuffle={() => setIsShuffle(!isShuffle)}
-        onToggleRepeat={() => setIsRepeat(!isRepeat)}
+        onToggleRepeat={handleCycleRepeatMode}
         onToggleFavorite={handleToggleFavorite}
         onOpenEQ={() => {
           setIsNowPlayingOpen(false);

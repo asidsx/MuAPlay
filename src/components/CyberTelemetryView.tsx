@@ -37,13 +37,22 @@ export const CyberTelemetryView: React.FC<CyberTelemetryViewProps> = ({
     rmsDb: -96,
     peakPercent: 0,
     eqActive: false,
+    normalizerEnabled: true,
+    normalizerGainDb: 0,
+    normalizerTargetDb: -14,
   });
 
   // Poll live telemetry at 15fps when playing
   useEffect(() => {
     const updateTelemetry = () => {
       const stats = audioEngine.getLiveTelemetry();
-      setLiveStats(stats);
+      const normStats = audioEngine.getNormalizerStats();
+      setLiveStats({
+        ...stats,
+        normalizerEnabled: normStats.enabled,
+        normalizerGainDb: normStats.gainAdjustmentDb,
+        normalizerTargetDb: normStats.targetDb,
+      });
     };
 
     updateTelemetry();
@@ -176,15 +185,33 @@ export const CyberTelemetryView: React.FC<CyberTelemetryViewProps> = ({
           </div>
         </div>
 
-        {/* RMS Loudness & DAC Specs */}
-        <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
+        {/* RMS Loudness, ReplayGain Normalizer dB & DAC Specs */}
+        <div className="grid grid-cols-3 gap-1.5 pt-1 text-[10px]">
           <div className="bg-[#0A0205] p-2 rounded-lg border border-[#FF1A3C]/25">
-            <span className="text-[#883344] block text-[8px] uppercase">LOUDSNESS (RMS)</span>
-            <span className="font-bold text-[#00E5FF]">{isPlaying ? `${liveStats.rmsDb} dB` : '-∞ dB'}</span>
+            <span className="text-[#883344] block text-[8px] uppercase">LOUDNESS (RMS)</span>
+            <span className="font-bold text-[#00E5FF] truncate block">
+              {isPlaying ? `${liveStats.rmsDb} dB` : '-∞ dB'}
+            </span>
           </div>
           <div className="bg-[#0A0205] p-2 rounded-lg border border-[#FF1A3C]/25">
-            <span className="text-[#883344] block text-[8px] uppercase">АППАРАТНЫЙ ВЫВОД ЦАП</span>
-            <span className="font-bold text-[#00FF66]">{liveStats.sampleRate} Hz DAC</span>
+            <span className="text-[#883344] block text-[8px] uppercase">ВЫРАВНИВАНИЕ</span>
+            <span
+              className={`font-bold truncate block ${
+                liveStats.normalizerGainDb > 0
+                  ? 'text-[#00FF66]'
+                  : liveStats.normalizerGainDb < 0
+                  ? 'text-[#FF8095]'
+                  : 'text-white'
+              }`}
+            >
+              {liveStats.normalizerEnabled
+                ? `${liveStats.normalizerGainDb > 0 ? '+' : ''}${liveStats.normalizerGainDb} dB`
+                : 'OFF'}
+            </span>
+          </div>
+          <div className="bg-[#0A0205] p-2 rounded-lg border border-[#FF1A3C]/25">
+            <span className="text-[#883344] block text-[8px] uppercase">ВЫВОД ЦАП</span>
+            <span className="font-bold text-[#00FF66] truncate block">{liveStats.sampleRate} Hz</span>
           </div>
         </div>
       </div>

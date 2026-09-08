@@ -17,7 +17,9 @@ class AudioEngine {
   private audioElement: HTMLAudioElement | null = null;
   private previewAudioElement: HTMLAudioElement | null = null;
   private sourceNode: MediaElementAudioSourceNode | null = null;
-  private gainNode: GainNode | null = null;
+  private masterGainNode: GainNode | null = null;
+  private normalizerGainNode: GainNode | null = null;
+  private compressorNode: DynamicsCompressorNode | null = null;
   private analyserNode: AnalyserNode | null = null;
   private eqFilters: BiquadFilterNode[] = [];
   private isInitialized = false;
@@ -25,6 +27,15 @@ class AudioEngine {
   // Track state
   public currentTrackId: string | null = null;
   public previewingTrackPath: string | null = null;
+
+  // Loudness Normalization (ReplayGain / Automatic Leveling)
+  private isNormalizerEnabled = true;
+  private targetLoudnessDb = -14.0; // Standard target loudness (-14 dBFS RMS, EBU R128 standard)
+  private currentRmsDb = -14.0;
+  private smoothedRmsDb = -14.0;
+  private currentGainAdjustmentDb = 0.0;
+  private userMasterVolume = 1.0;
+  private normalizerTimer: number | null = null;
 
   public init() {
     if (this.isInitialized) return;
@@ -44,12 +55,21 @@ class AudioEngine {
       if (this.audioElement) {
         try {
           this.sourceNode = this.ctx.createMediaElementSource(this.audioElement);
-          this.gainNode = this.ctx.createGain();
+          this.normalizerGainNode = this.ctx.createGain();
+          this.masterGainNode = this.ctx.createGain();
           this.analyserNode = this.ctx.createAnalyser();
           this.analyserNode.fftSize = 256;
           this.analyserNode.smoothingTimeConstant = 0.65;
           this.analyserNode.minDecibels = -90;
           this.analyserNode.maxDecibels = -10;
+
+          // Studio Brickwall Limiter & Dynamics Compressor for transparent peak protection
+          this.compressorNode = this.ctx.createDynamicsCompressor();
+          this.compressorNode.threshold.value = -2.0; // dB
+          this.compressorNode.knee.value = 10.0; // dB
+          this.compressorNode.ratio.value = 12.0; // Limiting ratio
+          this.compressorNode.attack.value = 0.003; // 3ms fast attack
+          this.compressorNode.release.value = 0.15; // 150ms release
 
           // Build 10-Band Graphic Equalizer
           this.eqFilters = EQ_FREQUENCIES.map((freq) => {
@@ -61,16 +81,26 @@ class AudioEngine {
             return filter;
           });
 
-          // Connect chain: Source -> EQ Filter 0 -> ... -> EQ Filter N -> Gain -> Analyser -> Destination
+          // Connect chain:
+          // Source -> EQ Filters -> NormalizerGain (per-track RMS leveling) -> MasterGain (user volume) -> Compressor (brickwall peak protection) -> Analyser -> Destination
           let currentNode: AudioNode = this.sourceNode;
           this.eqFilters.forEach((filter) => {
             currentNode.connect(filter);
             currentNode = filter;
           });
 
-          currentNode.connect(this.gainNode);
-          this.gainNode.connect(this.analyserNode);
+          currentNode.connect(this.normalizerGainNode);
+          this.normalizerGainNode.connect(this.masterGainNode);
+          this.masterGainNode.connect(this.compressorNode);
+          this.compressorNode.connect(this.analyserNode);
           this.analyserNode.connect(this.ctx.destination);
+
+          // Apply initial volume
+          this.masterGainNode.gain.value = this.userMasterVolume;
+          this.normalizerGainNode.gain.value = 1.0;
+
+          // Start continuous background loudness normalizer loop
+          this.startNormalizerLoop();
         } catch (err) {
           console.warn('Web Audio source creation failed, using standard HTML5 Audio:', err);
         }
@@ -80,6 +110,60 @@ class AudioEngine {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
+  }
+
+  // --- AUTOMATIC LOUDNESS NORMALIZER (REPLAYGAIN / RMS LEVELER) ---
+  private startNormalizerLoop() {
+    if (this.normalizerTimer) return;
+    this.normalizerTimer = window.setInterval(() => {
+      this.updateNormalizerStep();
+    }, 150);
+  }
+
+  private updateNormalizerStep() {
+    if (!this.audioElement || this.audioElement.paused || !this.normalizerGainNode || !this.ctx) {
+      return;
+    }
+
+    if (!this.isNormalizerEnabled) {
+      if (this.currentGainAdjustmentDb !== 0) {
+        this.normalizerGainNode.gain.setTargetAtTime(1.0, this.ctx.currentTime, 0.1);
+        this.currentGainAdjustmentDb = 0;
+      }
+      return;
+    }
+
+    const data = this.getTimeDomainData();
+    if (!data || data.length === 0) return;
+
+    let sumSquares = 0;
+    for (let i = 0; i < data.length; i++) {
+      const val = (data[i] - 128) / 128;
+      sumSquares += val * val;
+    }
+    const rms = Math.sqrt(sumSquares / data.length);
+
+    // If signal is essentially silence (< -46 dBFS), skip leveling to avoid boosting silence
+    if (rms < 0.005) {
+      return;
+    }
+
+    const liveRmsDb = 20 * Math.log10(rms);
+    this.currentRmsDb = liveRmsDb;
+
+    // Exponential moving average for track perceived loudness
+    this.smoothedRmsDb = this.smoothedRmsDb * 0.9 + liveRmsDb * 0.1;
+
+    // Difference between standard target (-14 dBFS) and measured track loudness
+    const diffDb = this.targetLoudnessDb - this.smoothedRmsDb;
+
+    // Clamp adjustment to safe boundary [-12 dB to +8 dB]
+    const clampedAdjustmentDb = Math.max(-12, Math.min(8, diffDb));
+    this.currentGainAdjustmentDb = +clampedAdjustmentDb.toFixed(1);
+
+    const linearGain = Math.pow(10, clampedAdjustmentDb / 20);
+    // Smooth transition over 300ms
+    this.normalizerGainNode.gain.setTargetAtTime(linearGain, this.ctx.currentTime, 0.3);
   }
 
   public async playTrack(url: string, trackId: string, fallbackGenerator?: () => string, forceRestart = false) {
@@ -95,6 +179,13 @@ class AudioEngine {
       this.currentTrackId = trackId;
       this.audioElement.src = url;
       this.audioElement.currentTime = 0;
+      // Reset smoothed RMS loudness tracker for the new song
+      this.smoothedRmsDb = -14.0;
+      this.currentRmsDb = -14.0;
+      this.currentGainAdjustmentDb = 0.0;
+      if (this.normalizerGainNode && this.ctx) {
+        this.normalizerGainNode.gain.setTargetAtTime(1.0, this.ctx.currentTime, 0.05);
+      }
     }
 
     try {
@@ -132,12 +223,38 @@ class AudioEngine {
   }
 
   public setVolume(volume: number) { // 0 to 1
-    if (this.gainNode) {
-      this.gainNode.gain.value = volume;
+    this.userMasterVolume = Math.max(0, Math.min(1, volume));
+    if (this.masterGainNode && this.ctx) {
+      this.masterGainNode.gain.setTargetAtTime(this.userMasterVolume, this.ctx.currentTime, 0.05);
     }
     if (this.audioElement) {
-      this.audioElement.volume = volume;
+      this.audioElement.volume = this.userMasterVolume;
     }
+  }
+
+  // --- LOUDNESS NORMALIZER (REPLAYGAIN / RMS) CONTROLS ---
+  public setNormalizerEnabled(enabled: boolean) {
+    this.isNormalizerEnabled = enabled;
+    if (this.normalizerGainNode && this.ctx) {
+      if (!enabled) {
+        this.normalizerGainNode.gain.setTargetAtTime(1.0, this.ctx.currentTime, 0.1);
+        this.currentGainAdjustmentDb = 0;
+      }
+    }
+  }
+
+  public isNormalizerActive(): boolean {
+    return this.isNormalizerEnabled;
+  }
+
+  public getNormalizerStats() {
+    return {
+      enabled: this.isNormalizerEnabled,
+      targetDb: this.targetLoudnessDb,
+      currentRmsDb: this.currentRmsDb > -90 ? +this.currentRmsDb.toFixed(1) : -14.0,
+      smoothedRmsDb: this.smoothedRmsDb > -90 ? +this.smoothedRmsDb.toFixed(1) : -14.0,
+      gainAdjustmentDb: this.currentGainAdjustmentDb,
+    };
   }
 
   // --- PREVIEW PLAYER (For modal before adding to playlist) ---

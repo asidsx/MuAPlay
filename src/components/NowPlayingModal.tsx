@@ -7,6 +7,7 @@ import {
   SkipForward,
   Shuffle,
   Repeat,
+  Repeat1,
   Heart,
   Volume2,
   VolumeX,
@@ -20,7 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { Track } from '../types/music';
+import { Track, RepeatMode } from '../types/music';
 import { CyberWaveformScrubber } from './CyberWaveformScrubber';
 import { CyberLyricsView } from './CyberLyricsView';
 import { CyberCoverImage } from './CyberCoverImage';
@@ -36,7 +37,8 @@ interface NowPlayingModalProps {
   duration: number;
   volume: number;
   isShuffle: boolean;
-  isRepeat: boolean;
+  isRepeat?: boolean;
+  repeatMode?: RepeatMode;
   onPlayPause: () => void;
   onNext: () => void;
   onPrev: () => void;
@@ -59,7 +61,8 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
   duration,
   volume,
   isShuffle,
-  isRepeat,
+  isRepeat = true,
+  repeatMode = 'all',
   onPlayPause,
   onNext,
   onPrev,
@@ -391,18 +394,42 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
           />
         </div>
 
-        {/* Playback Controls (Shuffle, Prev, Play/Pause, Next, Loop) */}
+        {/* Playback Controls: Repeat 3-Modes (Bottom-Left), Prev, Play/Pause, Next, Shuffle (Bottom-Right) */}
         <div className="flex items-center justify-between pt-1">
+          {/* Repeat Button (3 Modes: Off, All, One) */}
           <button
-            onClick={onToggleShuffle}
-            className={`p-2 rounded-lg transition-colors border ${
-              isShuffle
-                ? 'text-[#00E5FF] bg-[#00E5FF]/15 border-[#00E5FF]/50 shadow-[0_0_8px_rgba(0,229,255,0.4)]'
-                : 'text-[#882233] border-transparent hover:text-[#FF8095]'
+            onClick={onToggleRepeat}
+            className={`relative p-2.5 rounded-xl transition-all border ${
+              repeatMode === 'one'
+                ? 'text-[#FF1A3C] bg-[#FF1A3C]/20 border-[#FF1A3C] shadow-[0_0_12px_rgba(255,26,60,0.7)]'
+                : repeatMode === 'all'
+                ? 'text-[#00E5FF] bg-[#00E5FF]/15 border-[#00E5FF]/60 shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                : 'text-[#882233] border-transparent hover:text-[#FF8095] hover:border-[#FF1A3C]/30'
             }`}
-            title="Перемешать"
+            title={
+              repeatMode === 'one'
+                ? 'Повтор: Один трек (нажмите для выключения)'
+                : repeatMode === 'all'
+                ? 'Повтор: Весь список (нажмите для повтора одного трека)'
+                : 'Повтор: Выключен (нажмите для включения повтора списка)'
+            }
           >
-            <Shuffle className="w-4 h-4" />
+            {repeatMode === 'one' ? (
+              <Repeat1 className="w-4 h-4 stroke-[2.5]" />
+            ) : (
+              <Repeat className="w-4 h-4" />
+            )}
+            {repeatMode !== 'off' && (
+              <span
+                className={`absolute -top-1 -right-1 px-1 py-0.2 rounded text-[7px] font-mono font-black ${
+                  repeatMode === 'one'
+                    ? 'bg-[#FF1A3C] text-black shadow-[0_0_6px_#FF1A3C]'
+                    : 'bg-[#00E5FF] text-black shadow-[0_0_6px_#00E5FF]'
+                }`}
+              >
+                {repeatMode === 'one' ? '1' : 'ALL'}
+              </span>
+            )}
           </button>
 
           <button
@@ -433,16 +460,17 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({
             <SkipForward className="w-5 h-5 fill-current" />
           </button>
 
+          {/* Shuffle Button (Bottom-Right) */}
           <button
-            onClick={onToggleRepeat}
-            className={`p-2 rounded-lg transition-colors border ${
-              isRepeat
+            onClick={onToggleShuffle}
+            className={`p-2.5 rounded-xl transition-colors border ${
+              isShuffle
                 ? 'text-[#00E5FF] bg-[#00E5FF]/15 border-[#00E5FF]/50 shadow-[0_0_8px_rgba(0,229,255,0.4)]'
                 : 'text-[#882233] border-transparent hover:text-[#FF8095]'
             }`}
-            title="Повтор"
+            title={isShuffle ? 'Перемешивание: Включено' : 'Перемешивание: Выключено'}
           >
-            <Repeat className="w-4 h-4" />
+            <Shuffle className="w-4 h-4" />
           </button>
         </div>
 

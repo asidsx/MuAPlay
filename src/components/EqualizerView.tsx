@@ -11,8 +11,24 @@ export const EqualizerView: React.FC<EqualizerViewProps> = ({ isPlaying }) => {
   const [gains, setGains] = useState<number[]>([2, 3, 1, 0, 0, 1, 3, 4, 5, 5]);
   const [bassBoost, setBassBoost] = useState<number>(60);
   const [spatialAudio, setSpatialAudio] = useState<boolean>(true);
+  const [normalizerActive, setNormalizerActive] = useState<boolean>(() => audioEngine.isNormalizerActive());
+  const [normalizerStats, setNormalizerStats] = useState(() => audioEngine.getNormalizerStats());
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Poll normalizer live dB status
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNormalizerStats(audioEngine.getNormalizerStats());
+    }, 200);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleToggleNormalizer = () => {
+    const next = !normalizerActive;
+    setNormalizerActive(next);
+    audioEngine.setNormalizerEnabled(next);
+  };
 
   // Handle Preset Change
   const handleSelectPreset = (presetName: string) => {
@@ -189,6 +205,69 @@ export const EqualizerView: React.FC<EqualizerViewProps> = ({ isPlaying }) => {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Dynamic dB Volume Normalizer (ReplayGain / Standard Sound Leveling) */}
+      <div className="bg-[#100308] border border-[#FF1A3C]/50 rounded-xl p-3 space-y-2 shadow-[0_0_15px_rgba(255,26,60,0.15)]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-[#FF1A3C]/15 text-[#FF1A3C] border border-[#FF1A3C]/40">
+              <Volume2 className="w-4 h-4 text-[#FF1A3C]" />
+            </div>
+            <div>
+              <span className="text-[11px] font-black text-white tracking-wide flex items-center gap-1.5">
+                <span>ВЫРАВНИВАНИЕ ГРОМКОСТИ ТРЕКОВ</span>
+                <span className="px-1 py-0.2 rounded text-[7px] font-mono font-bold bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40">
+                  RMS -14 dBFS
+                </span>
+              </span>
+              <span className="text-[9px] text-[#883344] block">
+                Усреднение громкости песен до единого стандарта (EBU R128 / ReplayGain)
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleToggleNormalizer}
+            className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black tracking-wider border transition-all ${
+              normalizerActive
+                ? 'bg-[#FF1A3C] text-black border-[#FF1A3C] shadow-[0_0_10px_#FF1A3C]'
+                : 'bg-[#080104] text-[#883344] border-[#FF1A3C]/30'
+            }`}
+          >
+            {normalizerActive ? 'АКТИВНО' : 'ОТКЛ'}
+          </button>
+        </div>
+
+        {/* Live dB Telemetry readout */}
+        <div className="grid grid-cols-3 gap-1.5 pt-0.5 text-center font-mono">
+          <div className="bg-[#080104] p-1.5 rounded-lg border border-[#FF1A3C]/20">
+            <span className="text-[7px] text-[#883344] uppercase block">УРОВЕНЬ ТРЕКА</span>
+            <span className="text-[10px] font-bold text-[#00E5FF]">
+              {isPlaying && normalizerActive ? `${normalizerStats.smoothedRmsDb} dB` : '-14.0 dB'}
+            </span>
+          </div>
+          <div className="bg-[#080104] p-1.5 rounded-lg border border-[#FF1A3C]/20">
+            <span className="text-[7px] text-[#883344] uppercase block">КОРРЕКЦИЯ</span>
+            <span
+              className={`text-[10px] font-bold ${
+                normalizerStats.gainAdjustmentDb > 0
+                  ? 'text-[#00FF66]'
+                  : normalizerStats.gainAdjustmentDb < 0
+                  ? 'text-[#FF8095]'
+                  : 'text-[#883344]'
+              }`}
+            >
+              {normalizerActive
+                ? `${normalizerStats.gainAdjustmentDb > 0 ? '+' : ''}${normalizerStats.gainAdjustmentDb} dB`
+                : '0.0 dB'}
+            </span>
+          </div>
+          <div className="bg-[#080104] p-1.5 rounded-lg border border-[#FF1A3C]/20">
+            <span className="text-[7px] text-[#883344] uppercase block">СТАНДАРТ ЦЕЛЬ</span>
+            <span className="text-[10px] font-bold text-white">{normalizerStats.targetDb} dBFS</span>
+          </div>
         </div>
       </div>
 
