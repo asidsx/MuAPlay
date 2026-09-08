@@ -81,8 +81,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   };
 
   const isSelectedPlaylistActive = selectedPlaylist
-    ? activePlaylistId === selectedPlaylist.id ||
-      (!activePlaylistId && currentTrackId && selectedPlaylist.trackIds.includes(currentTrackId))
+    ? activePlaylistId === selectedPlaylist.id
     : false;
   const isSelectedPlaylistPlaying = isSelectedPlaylistActive && isPlaying;
 
@@ -254,13 +253,13 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
               </div>
             ) : (
               getPlaylistTracks(selectedPlaylist).map((track, idx) => {
-                const isCurrent = currentTrackId === track.id;
-                const isTrackPlaying = isCurrent && isPlaying;
+                const isCurrentInThisPlaylist = isSelectedPlaylistActive && currentTrackId === track.id;
+                const isTrackPlaying = isCurrentInThisPlaylist && isPlaying;
                 return (
                   <div
                     key={`${selectedPlaylist.id}-${track.id}-${idx}`}
                     onClick={() => {
-                      if (isCurrent) {
+                      if (isCurrentInThisPlaylist) {
                         if (onTogglePlay) onTogglePlay();
                         else onPlayTrack(track);
                       } else {
@@ -268,7 +267,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                       }
                     }}
                     className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border group ${
-                      isCurrent
+                      isCurrentInThisPlaylist
                         ? 'bg-[#1A040D] border-[#FF1A3C] shadow-[0_0_10px_rgba(255,26,60,0.3)] ring-1 ring-[#FF1A3C]/40'
                         : 'bg-[#120308] border-[#FF1A3C]/30 hover:border-[#FF1A3C]/60'
                     }`}
@@ -281,7 +280,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                             <span className="w-0.5 bg-[#FF1A3C] h-3 animate-pulse" />
                             <span className="w-0.5 bg-[#00E5FF] h-1.5 animate-bounce delay-75" />
                           </div>
-                        ) : isCurrent ? (
+                        ) : isCurrentInThisPlaylist ? (
                           <Pause className="w-3 h-3 text-[#FF1A3C]" />
                         ) : (
                           idx + 1
@@ -299,7 +298,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                       <div className="min-w-0 flex-1">
                         <h4
                           className={`text-xs font-bold truncate ${
-                            isCurrent ? 'text-[#00E5FF]' : 'text-white group-hover:text-[#FF4D6D]'
+                            isCurrentInThisPlaylist ? 'text-[#00E5FF]' : 'text-white group-hover:text-[#FF4D6D]'
                           }`}
                         >
                           {track.title}
@@ -422,9 +421,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             ) : (
               playlists.map((pl) => {
                 const plTracks = getPlaylistTracks(pl);
-                const isThisPlActive =
-                  activePlaylistId === pl.id ||
-                  (!activePlaylistId && currentTrackId && pl.trackIds.includes(currentTrackId));
+                const isThisPlActive = activePlaylistId === pl.id;
                 const isThisPlPlaying = isThisPlActive && isPlaying;
 
                 return (

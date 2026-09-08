@@ -247,6 +247,37 @@ export default function App() {
     }
   }, []);
 
+  // Filtered & Sorted tracks for Media Library
+  const processedTracks = tracks
+    .filter((t) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !q ||
+        t.title.toLowerCase().includes(q) ||
+        t.artist.toLowerCase().includes(q) ||
+        t.album.toLowerCase().includes(q) ||
+        t.hiResInfo.format.toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+
+      if (trackFilter === 'flac') {
+        return t.hiResInfo.isLossless || t.hiResInfo.format.toUpperCase() === 'FLAC';
+      }
+      if (trackFilter === 'favorites') {
+        return t.isFavorite;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (trackSort === 'title') return a.title.localeCompare(b.title);
+      if (trackSort === 'artist') return a.artist.localeCompare(b.artist);
+      if (trackSort === 'duration') return b.duration - a.duration;
+      return 0;
+    });
+
+  const filteredTracks = processedTracks;
+  const favoriteTracks = tracks.filter((t) => t.isFavorite);
+
   const currentTrack = tracks.find((t) => t.id === currentTrackId) || tracks[0] || null;
 
   // Audio Playback Listener Sync
@@ -427,13 +458,8 @@ export default function App() {
     return null;
   };
 
-  const handlePlayTrack = async (track: Track) => {
-    // If the user tapped on the currently loaded track, toggle play/pause instead of restarting
-    if (currentTrackId === track.id) {
-      handleTogglePlayPause();
-      return;
-    }
-
+  // Core audio playback engine trigger
+  const handlePlayTrackCore = async (track: Track) => {
     setCurrentTrackId(track.id);
     prefetchTrackWaveform(track);
 
@@ -447,6 +473,74 @@ export default function App() {
     setIsPlaying(true);
     const fallbackGen = () => generateSyntheticAudioBlob('synthwave', track.duration || 180);
     audioEngine.playTrack(playUrl, track.id, fallbackGen, true);
+  };
+
+  // General Play Track (used by modals, previews, or single trigger)
+  const handlePlayTrack = async (track: Track) => {
+    // If the user tapped on the currently loaded track, toggle play/pause instead of restarting
+    if (currentTrackId === track.id) {
+      handleTogglePlayPause();
+      return;
+    }
+
+    handlePlayTrackCore(track);
+  };
+
+  // Play Track from Media Library (Tab 1) -> Detaches playlist and sets queue from tracks view
+  const handlePlayTrackFromLibrary = (track: Track) => {
+    // If user tapped on currently loaded track while already in library mode (activePlaylistId === null)
+    if (currentTrackId === track.id && activePlaylistId === null) {
+      handleTogglePlayPause();
+      return;
+    }
+
+    // 1. Detach from any playlist: remove activePlaylistId so playlists never show active state
+    setActivePlaylistId(null);
+
+    // 2. Reset upcoming queue according to Tracks tab rules
+    const currentPool = filteredTracks.length > 0 ? filteredTracks : tracks;
+    const currentIndex = currentPool.findIndex((t) => t.id === track.id);
+    let upcoming: Track[] = [];
+    if (currentIndex !== -1) {
+      const nextTracks = currentPool.slice(currentIndex + 1);
+      const prevTracks = currentPool.slice(0, currentIndex);
+      upcoming = [...nextTracks, ...prevTracks].map((t, idx) => ({
+        ...t,
+        queueId: `q-lib-${t.id}-${Date.now()}-${idx}`,
+      }));
+    }
+    setUserQueue(upcoming);
+
+    // 3. Play the chosen track
+    handlePlayTrackCore(track);
+    setFileAlert(`[ МЕДИАТЕКА ] Воспроизведение «${track.title}». Очередь треков обновлена`);
+    setTimeout(() => setFileAlert(null), 2000);
+  };
+
+  // Play Track from Favorites (Tab 5) -> Detaches playlist and sets queue from favorites
+  const handlePlayTrackFromFavorites = (track: Track) => {
+    if (currentTrackId === track.id && activePlaylistId === null) {
+      handleTogglePlayPause();
+      return;
+    }
+
+    setActivePlaylistId(null);
+
+    const currentIndex = favoriteTracks.findIndex((t) => t.id === track.id);
+    let upcoming: Track[] = [];
+    if (currentIndex !== -1) {
+      const nextTracks = favoriteTracks.slice(currentIndex + 1);
+      const prevTracks = favoriteTracks.slice(0, currentIndex);
+      upcoming = [...nextTracks, ...prevTracks].map((t, idx) => ({
+        ...t,
+        queueId: `q-fav-${t.id}-${Date.now()}-${idx}`,
+      }));
+    }
+    setUserQueue(upcoming);
+
+    handlePlayTrackCore(track);
+    setFileAlert(`[ ИЗБРАННОЕ ] Воспроизведение «${track.title}»`);
+    setTimeout(() => setFileAlert(null), 2000);
   };
 
   const handleDeleteTrack = async (trackId: string, e?: React.MouseEvent) => {
@@ -512,39 +606,64 @@ export default function App() {
     if (userQueue.length > 0) {
       const nextFromQueue = userQueue[0];
       setUserQueue((prev) => prev.slice(1));
-      handlePlayTrack(nextFromQueue);
+      handlePlayTrackCore(nextFromQueue);
       return;
     }
 
-    if (tracks.length === 0) return;
-    let nextIndex = 0;
-    const activeId = currentTrackId || currentTrack?.id;
-    const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : -1;
-
-    if (isShuffle) {
-      nextIndex = tracks.length > 1 ? Math.floor(Math.random() * tracks.length) : 0;
-      if (tracks.length > 1 && nextIndex === currentIndex) {
-        nextIndex = (currentIndex + 1) % tracks.length;
-      }
-    } else {
-      if (currentIndex === -1) {
-        nextIndex = tracks.length > 1 ? 1 : 0;
-      } else {
-        nextIndex = (currentIndex + 1) % tracks.length;
+    // If activePlaylistId is set, determine next track within playlist
+    if (activePlaylistId) {
+      const currentPl = playlists.find((p) => p.id === activePlaylistId);
+      if (currentPl && currentPl.trackIds.length > 0) {
+        const plTracks = currentPl.trackIds
+          .map((id) => tracks.find((t) => t.id === id))
+          .filter((t): t is Track => t !== undefined);
+        if (plTracks.length > 0) {
+          const activeId = currentTrackId || currentTrack?.id;
+          const curIdx = plTracks.findIndex((t) => t.id === activeId);
+          let nextIdx = 0;
+          if (isShuffle) {
+            nextIdx = plTracks.length > 1 ? Math.floor(Math.random() * plTracks.length) : 0;
+            if (plTracks.length > 1 && nextIdx === curIdx) {
+              nextIdx = (curIdx + 1) % plTracks.length;
+            }
+          } else {
+            nextIdx = curIdx === -1 ? 0 : (curIdx + 1) % plTracks.length;
+          }
+          handlePlayTrackCore(plTracks[nextIdx]);
+          return;
+        }
       }
     }
 
-    const nextTrack = tracks[nextIndex];
+    // Default tracks library sequence:
+    const pool = filteredTracks.length > 0 ? filteredTracks : tracks;
+    if (pool.length === 0) return;
+    let nextIndex = 0;
+    const activeId = currentTrackId || currentTrack?.id;
+    const currentIndex = activeId ? pool.findIndex((t) => t.id === activeId) : -1;
+
+    if (isShuffle) {
+      nextIndex = pool.length > 1 ? Math.floor(Math.random() * pool.length) : 0;
+      if (pool.length > 1 && nextIndex === currentIndex) {
+        nextIndex = (currentIndex + 1) % pool.length;
+      }
+    } else {
+      if (currentIndex === -1) {
+        nextIndex = pool.length > 1 ? 1 : 0;
+      } else {
+        nextIndex = (currentIndex + 1) % pool.length;
+      }
+    }
+
+    const nextTrack = pool[nextIndex];
     if (nextTrack) {
-      handlePlayTrack(nextTrack);
+      handlePlayTrackCore(nextTrack);
     }
   };
 
   const lastPrevClickRef = useRef<number>(0);
 
   const handlePrevTrack = () => {
-    if (tracks.length === 0) return;
-
     const audio = audioEngine.getAudioElement();
     const curAudioTime = audio ? audio.currentTime : currentTime;
     const now = Date.now();
@@ -558,16 +677,38 @@ export default function App() {
       audioEngine.seek(0);
       setCurrentTime(0);
       lastPrevClickRef.current = now;
-    } else {
-      lastPrevClickRef.current = 0;
-      const activeId = currentTrackId || currentTrack?.id;
-      const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : 0;
-      const effectiveIndex = currentIndex === -1 ? 0 : currentIndex;
-      const prevIndex = (effectiveIndex - 1 + tracks.length) % tracks.length;
-      const prevTrack = tracks[prevIndex];
-      if (prevTrack) {
-        handlePlayTrack(prevTrack);
+      return;
+    }
+
+    lastPrevClickRef.current = 0;
+
+    // If activePlaylistId is set, determine prev track within playlist
+    if (activePlaylistId) {
+      const currentPl = playlists.find((p) => p.id === activePlaylistId);
+      if (currentPl && currentPl.trackIds.length > 0) {
+        const plTracks = currentPl.trackIds
+          .map((id) => tracks.find((t) => t.id === id))
+          .filter((t): t is Track => t !== undefined);
+        if (plTracks.length > 0) {
+          const activeId = currentTrackId || currentTrack?.id;
+          const curIdx = plTracks.findIndex((t) => t.id === activeId);
+          const effIdx = curIdx === -1 ? 0 : curIdx;
+          const prevIdx = (effIdx - 1 + plTracks.length) % plTracks.length;
+          handlePlayTrackCore(plTracks[prevIdx]);
+          return;
+        }
       }
+    }
+
+    const pool = filteredTracks.length > 0 ? filteredTracks : tracks;
+    if (pool.length === 0) return;
+    const activeId = currentTrackId || currentTrack?.id;
+    const currentIndex = activeId ? pool.findIndex((t) => t.id === activeId) : 0;
+    const effectiveIndex = currentIndex === -1 ? 0 : currentIndex;
+    const prevIndex = (effectiveIndex - 1 + pool.length) % pool.length;
+    const prevTrack = pool[prevIndex];
+    if (prevTrack) {
+      handlePlayTrackCore(prevTrack);
     }
   };
 
@@ -790,7 +931,7 @@ export default function App() {
       setUserQueue(upcoming);
     }
 
-    handlePlayTrack(firstTrack);
+    handlePlayTrackCore(firstTrack);
     setFileAlert(`[ ОЧЕРЕДЬ ШАРДА ] Загружено ${playlistTracks.length} треков из «${playlist.name}»`);
     setTimeout(() => setFileAlert(null), 2500);
   };
@@ -1051,38 +1192,6 @@ export default function App() {
     setIsFetchingLyrics(false);
   };
 
-  // Filtered & Sorted tracks for Media Library
-  const processedTracks = tracks
-    .filter((t) => {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch =
-        !q ||
-        t.title.toLowerCase().includes(q) ||
-        t.artist.toLowerCase().includes(q) ||
-        t.album.toLowerCase().includes(q) ||
-        t.hiResInfo.format.toLowerCase().includes(q);
-
-      if (!matchesSearch) return false;
-
-      if (trackFilter === 'flac') {
-        return t.hiResInfo.isLossless || t.hiResInfo.format.toUpperCase() === 'FLAC';
-      }
-      if (trackFilter === 'favorites') {
-        return t.isFavorite;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (trackSort === 'title') return a.title.localeCompare(b.title);
-      if (trackSort === 'artist') return a.artist.localeCompare(b.artist);
-      if (trackSort === 'duration') return b.duration - a.duration;
-      return 0;
-    });
-
-  const filteredTracks = processedTracks;
-
-  const favoriteTracks = tracks.filter((t) => t.isFavorite);
-
   const formatDuration = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
@@ -1277,7 +1386,7 @@ export default function App() {
                   return (
                     <div
                       key={track.id}
-                      onClick={() => handlePlayTrack(track)}
+                      onClick={() => handlePlayTrackFromLibrary(track)}
                       className={`group relative flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border ${
                         isCurrent
                           ? 'bg-[#1C040E] border-[#FF1A3C] shadow-[0_0_12px_rgba(255,26,60,0.35)]'
@@ -1456,7 +1565,7 @@ export default function App() {
                 favoriteTracks.map((track) => (
                   <div
                     key={track.id}
-                    onClick={() => handlePlayTrack(track)}
+                    onClick={() => handlePlayTrackFromFavorites(track)}
                     className="flex items-center justify-between p-2 bg-[#120308] hover:bg-[#18040D] border border-[#FF1A3C]/35 rounded-xl cursor-pointer transition-all"
                   >
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
