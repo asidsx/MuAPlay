@@ -74,10 +74,14 @@
 
 ## 📱 Скриншоты и экраны интерфейса
 
-| Медиатека треков | Холо-дек (Now Playing) | Эквалайзер 10-Band | Кибер Lockscreen |
-|:---:|:---:|:---:|:---:|
-| 🎵 Список FLAC/MP3 | 🌌 Реактивное кольцо + Свайпы | 🎛️ Бас + 3D Пространство | 🔒 Часы + Виджет + Фонарик |
-| *Быстрый поиск, сортировка, теги* | *Караоке LRC, волна, обложки* | *Пресеты, Hi-Res DAC* | *Свайп разблокировки* |
+<div align="center">
+
+| 🎵 Медиатека треков | 🌌 Холо-дек (Now Playing) | 🎛️ 10-Band EQ & DSP |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/library.png" width="250" alt="Медиатека MUAPLAY" /> | <img src="docs/screenshots/now_playing.png" width="250" alt="Холо-дек Плеер" /> | <img src="docs/screenshots/equalizer.png" width="250" alt="10-Band Эквалайзер" /> |
+| **Оффлайн Медиатека**<br><sub>FLAC / WAV / MP3 • Поиск и обложки</sub> | **CyberРеактивное Кольцо**<br><sub>Караоке LRC • FFT-визуализатор • Жесты</sub> | **Студийный DSP Движок**<br><sub>Sandevistan Bass • 3D Soundstage</sub> |
+
+</div>
 
 ---
 
