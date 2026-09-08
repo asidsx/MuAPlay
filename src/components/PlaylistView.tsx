@@ -1,8 +1,22 @@
 import React, { useState } from 'react';
-import { Plus, Play, Trash2, FolderPlus, ArrowLeft, Disc, Music2, Cpu, Download, Upload, FileCode } from 'lucide-react';
-import { Playlist, Track, ScannedFile } from '../types/music';
+import {
+  Plus,
+  Play,
+  Trash2,
+  ArrowLeft,
+  Disc,
+  Music2,
+  Cpu,
+  Download,
+  Upload,
+  FileCode,
+  Shuffle,
+  ListMusic,
+} from 'lucide-react';
+import { Playlist, Track } from '../types/music';
 import { AddTracksToPlaylistModal } from './AddTracksToPlaylistModal';
 import { downloadM3UFile, parseM3U, downloadLibraryBackup } from '../services/playlistExport';
+import { CyberCoverImage } from './CyberCoverImage';
 
 interface PlaylistViewProps {
   playlists: Playlist[];
@@ -10,14 +24,12 @@ interface PlaylistViewProps {
   currentTrackId: string | null;
   isPlaying: boolean;
   onPlayTrack: (track: Track) => void;
+  onPlayPlaylist: (playlist: Playlist, startIndex?: number, shuffle?: boolean) => void;
   onCreatePlaylist: (name: string, description: string) => void;
   onDeletePlaylist: (id: string) => void;
-  onAddTracksToPlaylist: (playlistId: string, selectedFiles: ScannedFile[]) => void;
+  onAddTracksToPlaylist: (playlistId: string, selectedTrackIds: string[]) => void;
   onRemoveTrackFromPlaylist: (playlistId: string, trackId: string) => void;
   onImportPlaylist?: (name: string, trackIds: string[]) => void;
-  availableDownloads: ScannedFile[];
-  onRescanDownloads: () => void;
-  isScanning: boolean;
 }
 
 export const PlaylistView: React.FC<PlaylistViewProps> = ({
@@ -26,14 +38,12 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   currentTrackId,
   isPlaying,
   onPlayTrack,
+  onPlayPlaylist,
   onCreatePlaylist,
   onDeletePlaylist,
   onAddTracksToPlaylist,
   onRemoveTrackFromPlaylist,
   onImportPlaylist,
-  availableDownloads,
-  onRescanDownloads,
-  isScanning,
 }) => {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -70,7 +80,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
       {selectedPlaylist ? (
         <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-200">
           {/* Header back & actions */}
-          <div className="flex items-center justify-between py-1 border-b border-[#FF1A3C]/30 pb-2">
+          <div className="flex items-center justify-between py-1 border-b border-[#FF1A3C]/30 pb-2 shrink-0">
             <button
               onClick={() => setSelectedPlaylistId(null)}
               className="flex items-center gap-1.5 text-xs text-[#00E5FF] hover:text-white font-bold transition-colors"
@@ -80,7 +90,12 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             </button>
 
             <button
-              onClick={() => onDeletePlaylist(selectedPlaylist.id)}
+              onClick={() => {
+                if (window.confirm(`Удалить плейлист «${selectedPlaylist.name}»?`)) {
+                  onDeletePlaylist(selectedPlaylist.id);
+                  setSelectedPlaylistId(null);
+                }
+              }}
               className="text-xs text-[#FF1A3C] hover:text-rose-400 p-1.5 rounded-lg bg-[#18040C] border border-[#FF1A3C]/30 hover:border-[#FF1A3C] transition-colors flex items-center gap-1"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -89,10 +104,10 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
           </div>
 
           {/* Playlist Info Banner */}
-          <div className="py-3 flex items-center gap-3.5 border-b border-[#FF1A3C]/30">
-            <div className="relative w-18 h-18 rounded-xl overflow-hidden bg-[#100308] shadow-lg border border-[#FF1A3C]/50 shrink-0">
-              <img
-                src={selectedPlaylist.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
+          <div className="py-3 flex items-center gap-3.5 border-b border-[#FF1A3C]/30 shrink-0">
+            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-[#100308] shadow-lg border border-[#FF1A3C]/50 shrink-0">
+              <CyberCoverImage
+                src={selectedPlaylist.coverUrl || getPlaylistTracks(selectedPlaylist)[0]?.coverUrl}
                 alt={selectedPlaylist.name}
                 className="w-full h-full object-cover"
               />
@@ -108,60 +123,117 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
               <p className="text-[10px] text-[#883344] truncate">
                 {selectedPlaylist.description || 'Нейро-плейлист'}
               </p>
-              <p className="text-[9px] text-[#00E5FF] mt-1 font-bold">
-                ТРЕКОВ В ШАРДЕ: {selectedPlaylist.trackIds.length}
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[9px] text-[#00E5FF] font-bold">
+                  ТРЕКОВ: {getPlaylistTracks(selectedPlaylist).length}
+                </span>
+                <span className="text-[9px] text-[#883344]">•</span>
+                <span className="text-[9px] text-[#FF4D6D] flex items-center gap-1">
+                  <ListMusic className="w-3 h-3 inline" />
+                  <span>АВТО-ОЧЕРЕДЬ ВКЛЮЧЕНА</span>
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Action Buttons: Add tracks & Export M3U */}
-          <div className="py-2 flex items-center justify-between gap-2">
+          {/* Action Buttons: Play All, Shuffle, Add Tracks, Export M3U */}
+          <div className="py-2.5 flex items-center flex-wrap gap-2 shrink-0">
+            {getPlaylistTracks(selectedPlaylist).length > 0 && (
+              <>
+                <button
+                  onClick={() => onPlayPlaylist(selectedPlaylist, 0, false)}
+                  className="px-3 py-1.5 bg-[#FF1A3C] hover:bg-[#FF0033] text-black rounded-lg font-black text-[10px] sm:text-[11px] flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(255,26,60,0.5)] active:scale-95"
+                  title="Воспроизвести весь плейлист и загрузить его в очередь"
+                >
+                  <Play className="w-3.5 h-3.5 fill-black" />
+                  <span>СЛУШАТЬ ВСЁ</span>
+                </button>
+
+                <button
+                  onClick={() => onPlayPlaylist(selectedPlaylist, 0, true)}
+                  className="px-2.5 py-1.5 bg-[#18040C] hover:bg-[#250412] text-[#00E5FF] border border-[#00E5FF]/40 hover:border-[#00E5FF] rounded-lg font-bold text-[10px] flex items-center gap-1.5 transition-all active:scale-95"
+                  title="Перемешать треки плейлиста и загрузить в очередь"
+                >
+                  <Shuffle className="w-3 h-3 text-[#00E5FF]" />
+                  <span>ПЕРЕМЕШАТЬ</span>
+                </button>
+              </>
+            )}
+
             <button
               onClick={() => setIsAddTracksModalOpen(true)}
-              className="px-3 py-1.5 bg-[#FF1A3C] hover:bg-[#FF0033] text-black rounded-lg font-black text-[11px] flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(255,26,60,0.5)] active:scale-95"
+              className="px-2.5 py-1.5 bg-[#18040C] hover:bg-[#250412] text-[#FF4D6D] border border-[#FF1A3C]/40 hover:border-[#FF1A3C] rounded-lg font-bold text-[10px] flex items-center gap-1.5 transition-all active:scale-95"
+              title="Выбрать песни из уже загруженных в плеер"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>ЗАГРУЗИТЬ В ШАРД</span>
+              <span>+ ИЗ МЕДИАТЕКИ</span>
             </button>
 
             <button
               onClick={() => downloadM3UFile(selectedPlaylist, tracks)}
-              className="px-2.5 py-1.5 bg-[#18040C] hover:bg-[#250412] text-[#00E5FF] border border-[#00E5FF]/40 hover:border-[#00E5FF] rounded-lg font-bold text-[10px] flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              className="px-2 py-1.5 bg-[#18040C] hover:bg-[#250412] text-[#883344] hover:text-[#00E5FF] border border-[#FF1A3C]/20 hover:border-[#00E5FF]/40 rounded-lg font-bold text-[9px] flex items-center gap-1 transition-all ml-auto"
               title="Экспортировать плейлист в файл .m3u8"
             >
-              <Download className="w-3.5 h-3.5 text-[#00E5FF]" />
-              <span>ЭКСПОРТ .M3U</span>
+              <Download className="w-3 h-3" />
+              <span className="hidden sm:inline">ЭКСПОРТ .M3U</span>
             </button>
           </div>
 
           {/* Tracks inside playlist */}
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
             {getPlaylistTracks(selectedPlaylist).length === 0 ? (
-              <div className="py-12 text-center text-[#883344] space-y-2 border border-dashed border-[#FF1A3C]/30 rounded-xl my-auto">
+              <div className="py-12 text-center text-[#883344] space-y-3 border border-dashed border-[#FF1A3C]/30 rounded-xl my-auto">
                 <Music2 className="w-8 h-8 mx-auto opacity-40 text-[#FF1A3C]" />
-                <p className="text-xs">[ ШАРД ПУСТ. ДОБАВЬТЕ АУДИОТРЕКИ ]</p>
+                <p className="text-xs font-bold">[ ШАРД ПУСТ ]</p>
+                <p className="text-[9px] text-[#662233] max-w-xs mx-auto">
+                  Нажмите кнопку «+ ИЗ МЕДИАТЕКИ», чтобы добавить песни из аудиоплеера
+                </p>
+                <button
+                  onClick={() => setIsAddTracksModalOpen(true)}
+                  className="px-3 py-1.5 bg-[#FF1A3C] text-black font-black text-[10px] rounded-lg shadow-[0_0_10px_rgba(255,26,60,0.4)]"
+                >
+                  ДОБАВИТЬ ПЕСНИ ИЗ ПЛЕЕРА
+                </button>
               </div>
             ) : (
-              getPlaylistTracks(selectedPlaylist).map((track) => {
+              getPlaylistTracks(selectedPlaylist).map((track, idx) => {
                 const isCurrent = currentTrackId === track.id;
                 return (
                   <div
-                    key={track.id}
-                    onClick={() => onPlayTrack(track)}
-                    className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border ${
+                    key={`${selectedPlaylist.id}-${track.id}-${idx}`}
+                    onClick={() => onPlayPlaylist(selectedPlaylist, idx, false)}
+                    className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border group ${
                       isCurrent
                         ? 'bg-[#1A040D] border-[#FF1A3C] shadow-[0_0_10px_rgba(255,26,60,0.3)]'
                         : 'bg-[#120308] border-[#FF1A3C]/30 hover:border-[#FF1A3C]/60'
                     }`}
                   >
-                    <div className="min-w-0 flex-1 pr-2">
-                      <h4 className={`text-xs font-bold truncate ${isCurrent ? 'text-[#00E5FF]' : 'text-white'}`}>
-                        {track.title}
-                      </h4>
-                      <p className="text-[10px] text-[#883344] truncate">{track.artist}</p>
+                    <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+                      <span className="text-[9px] font-mono text-[#662233] w-4 text-center shrink-0">
+                        {idx + 1}
+                      </span>
+
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/30">
+                        <CyberCoverImage
+                          src={track.coverUrl}
+                          alt={track.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <h4
+                          className={`text-xs font-bold truncate ${
+                            isCurrent ? 'text-[#00E5FF]' : 'text-white group-hover:text-[#FF4D6D]'
+                          }`}
+                        >
+                          {track.title}
+                        </h4>
+                        <p className="text-[10px] text-[#883344] truncate">{track.artist}</p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className="text-[9px] text-[#883344] font-mono">
                         {formatDuration(track.duration)}
                       </span>
@@ -185,7 +257,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
       ) : (
         /* List of All Playlists */
         <div className="flex-1 flex flex-col overflow-hidden space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-[#FF1A3C]/30">
+          <div className="flex items-center justify-between pb-2 border-b border-[#FF1A3C]/30 shrink-0">
             <div>
               <h2 className="text-xs font-black text-[#FFFFFF] flex items-center gap-1.5 tracking-wider">
                 <Disc className="w-4 h-4 text-[#FF1A3C]" />
@@ -215,7 +287,6 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                       const text = event.target?.result as string;
                       if (text) {
                         const parsed = parseM3U(text);
-                        // match track IDs
                         const matchedIds: string[] = [];
                         parsed.entries.forEach((entry) => {
                           const match = tracks.find(
@@ -258,57 +329,74 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
           </div>
 
           {/* Grid/List of Playlists */}
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
             {playlists.length === 0 ? (
               <div className="py-16 text-center text-[#883344] space-y-3 my-auto">
                 <Cpu className="w-12 h-12 mx-auto opacity-40 text-[#FF1A3C]" />
                 <h3 className="text-xs font-bold text-white">[ НЕТ ДАТА-ШАРДОВ ]</h3>
                 <p className="text-[10px] text-[#883344]">
-                  Создайте новый дата-шард для группировки аудиофайлов.
+                  Создайте новый дата-шард для группировки аудиофайлов из вашей медиатеки.
                 </p>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="px-4 py-2 bg-[#FF1A3C] text-black rounded-xl font-black text-xs shadow-[0_0_12px_rgba(255,26,60,0.5)]"
+                >
+                  + СОЗДАТЬ ПЕРВЫЙ ПЛЕЙЛИСТ
+                </button>
               </div>
             ) : (
-              playlists.map((pl) => (
-                <div
-                  key={pl.id}
-                  onClick={() => setSelectedPlaylistId(pl.id)}
-                  className="bg-[#120308] border border-[#FF1A3C]/35 hover:border-[#FF1A3C] rounded-xl p-3 flex items-center justify-between cursor-pointer transition-all group shadow-sm"
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#0A0206] border border-[#FF1A3C]/40 shrink-0">
-                      <img
-                        src={pl.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
-                        alt={pl.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-xs font-black text-white group-hover:text-[#00E5FF] transition-colors truncate">
-                        {pl.name}
-                      </h4>
-                      <p className="text-[10px] text-[#883344] truncate mt-0.5">
-                        {pl.description || 'Нейро-плейлист'}
-                      </p>
-                      <span className="inline-block mt-1 text-[8px] px-1.5 py-0.2 rounded font-bold bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40">
-                        {pl.trackIds.length} ТРЕКОВ
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const tracksInPl = getPlaylistTracks(pl);
-                      if (tracksInPl.length > 0) onPlayTrack(tracksInPl[0]);
-                    }}
-                    className="w-8 h-8 rounded-lg bg-[#FF1A3C] text-black flex items-center justify-center shadow-[0_0_8px_rgba(255,26,60,0.5)] hover:scale-105 transition-transform shrink-0"
-                    title="Воспроизвести шард"
+              playlists.map((pl) => {
+                const plTracks = getPlaylistTracks(pl);
+                return (
+                  <div
+                    key={pl.id}
+                    onClick={() => setSelectedPlaylistId(pl.id)}
+                    className="bg-[#120308] border border-[#FF1A3C]/35 hover:border-[#FF1A3C] rounded-xl p-3 flex items-center justify-between cursor-pointer transition-all group shadow-sm"
                   >
-                    <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
-                  </button>
-                </div>
-              ))
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#0A0206] border border-[#FF1A3C]/40 shrink-0">
+                        <CyberCoverImage
+                          src={pl.coverUrl || plTracks[0]?.coverUrl}
+                          alt={pl.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-black text-white group-hover:text-[#00E5FF] transition-colors truncate">
+                          {pl.name}
+                        </h4>
+                        <p className="text-[10px] text-[#883344] truncate mt-0.5">
+                          {pl.description || 'Нейро-плейлист'}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="inline-block text-[8px] px-1.5 py-0.2 rounded font-bold bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40">
+                            {pl.trackIds.length} ТРЕКОВ
+                          </span>
+                          {plTracks.length > 0 && (
+                            <span className="text-[8px] text-[#00E5FF] font-mono">
+                              {formatDuration(
+                                plTracks.reduce((acc, t) => acc + (t.duration || 0), 0)
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlayPlaylist(pl, 0, false);
+                      }}
+                      className="w-8 h-8 rounded-lg bg-[#FF1A3C] hover:bg-[#00E5FF] text-black flex items-center justify-center shadow-[0_0_8px_rgba(255,26,60,0.5)] hover:scale-105 transition-all shrink-0"
+                      title="Воспроизвести шард и загрузить очередь"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -324,7 +412,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             <form onSubmit={handleCreatePlaylistSubmit} className="space-y-3 text-xs">
               <div>
                 <label className="text-[10px] text-[#FF4D6D] block mb-1">
-                  НАИМЕНОВАНИЕ ШАРДА
+                  НАЗВАНИЕ ШАРДА
                 </label>
                 <input
                   type="text"
@@ -344,7 +432,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                   type="text"
                   value={newPlaylistDesc}
                   onChange={(e) => setNewPlaylistDesc(e.target.value)}
-                  placeholder="напр., Саундтрек для поездок"
+                  placeholder="напр., Саундтрек для ночных поездок"
                   className="w-full bg-[#080104] border border-[#FF1A3C]/40 rounded-lg px-2.5 py-1.5 text-white placeholder-[#552233] focus:outline-none focus:border-[#FF1A3C]"
                 />
               </div>
@@ -369,20 +457,18 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
         </div>
       )}
 
-      {/* Modal: Add Tracks to Playlist */}
+      {/* Modal: Add Tracks from Player Library to Playlist */}
       {selectedPlaylist && isAddTracksModalOpen && (
         <AddTracksToPlaylistModal
           isOpen={isAddTracksModalOpen}
           onClose={() => setIsAddTracksModalOpen(false)}
           playlistName={selectedPlaylist.name}
-          availableDownloads={availableDownloads}
+          availableTracks={tracks}
           existingTrackIds={selectedPlaylist.trackIds}
-          onAddTracks={(selectedFiles) => {
-            onAddTracksToPlaylist(selectedPlaylist.id, selectedFiles);
+          onAddTracks={(chosenTrackIds) => {
+            onAddTracksToPlaylist(selectedPlaylist.id, chosenTrackIds);
             setIsAddTracksModalOpen(false);
           }}
-          onRescanDownloads={onRescanDownloads}
-          isScanning={isScanning}
         />
       )}
     </div>

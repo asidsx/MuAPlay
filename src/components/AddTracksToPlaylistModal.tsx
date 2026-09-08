@@ -1,95 +1,125 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Square, Check, X, Search, FolderDown, RefreshCw, Cpu, Plus } from 'lucide-react';
-import { ScannedFile } from '../types/music';
+import { Play, Square, Check, X, Search, Music2, Plus, Sparkles, Heart } from 'lucide-react';
+import { Track } from '../types/music';
 import { audioEngine } from '../services/audioEngine';
+import { getPlayableTrackUrl } from '../services/audioStorage';
+import { CyberCoverImage } from './CyberCoverImage';
 
 interface AddTracksToPlaylistModalProps {
   isOpen: boolean;
   onClose: () => void;
   playlistName: string;
-  availableDownloads: ScannedFile[];
-  existingTrackIds?: string[];
-  onAddTracks: (selectedFiles: ScannedFile[]) => void;
-  onRescanDownloads: () => void;
-  isScanning: boolean;
+  availableTracks: Track[];
+  existingTrackIds: string[];
+  onAddTracks: (selectedTrackIds: string[]) => void;
 }
 
 export const AddTracksToPlaylistModal: React.FC<AddTracksToPlaylistModalProps> = ({
   isOpen,
   onClose,
   playlistName,
-  availableDownloads,
+  availableTracks,
   existingTrackIds = [],
   onAddTracks,
-  onRescanDownloads,
-  isScanning,
 }) => {
-  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [previewingPath, setPreviewingPath] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'new' | 'favorites'>('all');
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedPaths(new Set());
-      setPreviewingPath(null);
+      setSelectedIds(new Set());
+      setPreviewingId(null);
+      setSearchQuery('');
+      setActiveTab('all');
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const filteredFiles = availableDownloads.filter((file) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      file.name.toLowerCase().includes(q) ||
-      (file.title && file.title.toLowerCase().includes(q)) ||
-      (file.artist && file.artist.toLowerCase().includes(q)) ||
-      file.hiResInfo.format.toLowerCase().includes(q)
-    );
+  const existingSet = new Set(existingTrackIds);
+
+  const filteredTracks = availableTracks.filter((track) => {
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      track.title.toLowerCase().includes(q) ||
+      track.artist.toLowerCase().includes(q) ||
+      (track.album && track.album.toLowerCase().includes(q)) ||
+      track.hiResInfo?.format.toLowerCase().includes(q);
+
+    if (!matchesSearch) return false;
+
+    if (activeTab === 'new') {
+      return !existingSet.has(track.id);
+    }
+    if (activeTab === 'favorites') {
+      return !!track.isFavorite;
+    }
+
+    return true;
   });
 
-  const toggleSelectTrack = (path: string) => {
-    setSelectedPaths((prev) => {
+  const toggleSelectTrack = (trackId: string) => {
+    // If already in playlist, user can still toggle or see it's in shard
+    setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
+      if (next.has(trackId)) {
+        next.delete(trackId);
       } else {
-        next.add(path);
+        next.add(trackId);
       }
       return next;
     });
   };
 
+  const selectableTracks = filteredTracks.filter((t) => !existingSet.has(t.id));
+
   const toggleSelectAll = () => {
-    if (selectedPaths.size === filteredFiles.length) {
-      setSelectedPaths(new Set());
+    const allSelectableChosen =
+      selectableTracks.length > 0 && selectableTracks.every((t) => selectedIds.has(t.id));
+
+    if (allSelectableChosen) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        selectableTracks.forEach((t) => next.delete(t.id));
+        return next;
+      });
     } else {
-      setSelectedPaths(new Set(filteredFiles.map((f) => f.path)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        selectableTracks.forEach((t) => next.add(t.id));
+        return next;
+      });
     }
   };
 
-  const handlePlayPreview = (e: React.MouseEvent, file: ScannedFile) => {
+  const handlePlayPreview = async (e: React.MouseEvent, track: Track) => {
     e.stopPropagation();
-    if (previewingPath === file.path) {
+    if (previewingId === track.id) {
       audioEngine.stopPreview();
-      setPreviewingPath(null);
+      setPreviewingId(null);
     } else {
-      setPreviewingPath(file.path);
-      audioEngine.playPreview(file.previewUrl, file.path, () => {
-        setPreviewingPath(null);
+      const playUrl = await getPlayableTrackUrl(track);
+      if (!playUrl) return;
+      setPreviewingId(track.id);
+      audioEngine.playPreview(playUrl, track.id, () => {
+        setPreviewingId(null);
       });
     }
   };
 
   const handleSave = () => {
     audioEngine.stopPreview();
-    const selectedFiles = availableDownloads.filter((f) => selectedPaths.has(f.path));
-    onAddTracks(selectedFiles);
+    const chosen = Array.from(selectedIds);
+    onAddTracks(chosen);
     onClose();
   };
 
   const handleClose = () => {
     audioEngine.stopPreview();
-    setPreviewingPath(null);
+    setPreviewingId(null);
     onClose();
   };
 
@@ -106,9 +136,9 @@ export const AddTracksToPlaylistModal: React.FC<AddTracksToPlaylistModalProps> =
         <div className="p-3.5 bg-[#18040C] border-b border-[#FF1A3C]/40 flex items-center justify-between shrink-0">
           <div>
             <div className="flex items-center gap-1.5">
-              <Cpu className="w-4 h-4 text-[#FF1A3C]" />
+              <Music2 className="w-4 h-4 text-[#FF1A3C]" />
               <h3 className="text-xs font-black text-[#FFFFFF] tracking-wider">
-                [ ИНИЦИАЛИЗАЦИЯ ЗАПИСИ В ШАРД ]
+                [ ДОБАВЛЕНИЕ В ШАРД ИЗ МЕДИАТЕКИ ]
               </h3>
             </div>
             <p className="text-[10px] text-[#00E5FF] font-bold mt-0.5">
@@ -124,24 +154,42 @@ export const AddTracksToPlaylistModal: React.FC<AddTracksToPlaylistModalProps> =
           </button>
         </div>
 
-        {/* Scan & Search Controls */}
+        {/* Tab Filters and Search */}
         <div className="p-2.5 bg-[#120308] border-b border-[#FF1A3C]/30 space-y-2 shrink-0">
-          {/* Downloads folder path info & Rescan */}
-          <div className="flex items-center justify-between bg-[#0A0206] px-2.5 py-1.5 rounded-lg border border-[#FF1A3C]/30 text-xs">
-            <div className="flex items-center gap-2 text-[#E0E0E0] truncate">
-              <FolderDown className="w-3.5 h-3.5 text-[#00E5FF] shrink-0" />
-              <span className="truncate text-[10px] text-[#883344]">
-                /storage/emulated/0/Download/
-              </span>
-            </div>
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-2.5 py-1 rounded-lg text-[9px] font-bold tracking-wider transition-all whitespace-nowrap ${
+                activeTab === 'all'
+                  ? 'bg-[#FF1A3C] text-black shadow-[0_0_10px_rgba(255,26,60,0.4)]'
+                  : 'bg-[#18040C] text-[#883344] hover:text-white border border-[#FF1A3C]/30'
+              }`}
+            >
+              ВСЕ В ПЛЕЕРЕ ({availableTracks.length})
+            </button>
 
             <button
-              onClick={onRescanDownloads}
-              disabled={isScanning}
-              className="flex items-center gap-1 px-2 py-0.5 bg-[#FF1A3C]/20 hover:bg-[#FF1A3C]/30 text-[#FF1A3C] border border-[#FF1A3C]/40 rounded text-[9px] font-bold transition-colors shrink-0 disabled:opacity-50"
+              onClick={() => setActiveTab('new')}
+              className={`px-2.5 py-1 rounded-lg text-[9px] font-bold tracking-wider transition-all whitespace-nowrap ${
+                activeTab === 'new'
+                  ? 'bg-[#00E5FF] text-black shadow-[0_0_10px_rgba(0,229,255,0.4)]'
+                  : 'bg-[#18040C] text-[#883344] hover:text-[#00E5FF] border border-[#FF1A3C]/30'
+              }`}
             >
-              <RefreshCw className={`w-3 h-3 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'СКАНИРУЮ...' : 'ОБНОВИТЬ'}</span>
+              ЕЩЁ НЕ В ШАРДЕ ({availableTracks.filter((t) => !existingSet.has(t.id)).length})
+            </button>
+
+            <button
+              onClick={() => setActiveTab('favorites')}
+              className={`px-2.5 py-1 rounded-lg text-[9px] font-bold tracking-wider transition-all whitespace-nowrap flex items-center gap-1 ${
+                activeTab === 'favorites'
+                  ? 'bg-[#FF4D6D] text-black shadow-[0_0_10px_rgba(255,77,109,0.4)]'
+                  : 'bg-[#18040C] text-[#883344] hover:text-[#FF4D6D] border border-[#FF1A3C]/30'
+              }`}
+            >
+              <Heart className="w-2.5 h-2.5 inline fill-current" />
+              <span>ИЗБРАННОЕ ({availableTracks.filter((t) => t.isFavorite).length})</span>
             </button>
           </div>
 
@@ -153,8 +201,8 @@ export const AddTracksToPlaylistModal: React.FC<AddTracksToPlaylistModalProps> =
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ПОИСК ПО НАЗВАНИЮ..."
-                className="w-full bg-[#080104] border border-[#FF1A3C]/40 rounded-lg pl-8 pr-2.5 py-1 text-[10px] text-white placeholder-[#552233] focus:outline-none focus:border-[#FF1A3C]"
+                placeholder="ПОИСК ПО НАЗВАНИЮ, АРТИСТУ..."
+                className="w-full bg-[#080104] border border-[#FF1A3C]/40 rounded-lg pl-8 pr-2.5 py-1 text-[10px] text-white placeholder-[#552233] focus:outline-none focus:border-[#00E5FF]"
               />
               {searchQuery && (
                 <button
@@ -166,47 +214,61 @@ export const AddTracksToPlaylistModal: React.FC<AddTracksToPlaylistModalProps> =
               )}
             </div>
 
-            <button
-              onClick={toggleSelectAll}
-              className="px-2.5 py-1 bg-[#18040C] hover:bg-[#250412] text-[#00E5FF] border border-[#00E5FF]/40 rounded-lg text-[9px] font-bold shrink-0"
-            >
-              {selectedPaths.size === filteredFiles.length && filteredFiles.length > 0
-                ? 'СБРОСИТЬ'
-                : 'ВЫБРАТЬ ВСЕ'}
-            </button>
+            {selectableTracks.length > 0 && (
+              <button
+                onClick={toggleSelectAll}
+                className="px-2.5 py-1 bg-[#18040C] hover:bg-[#250412] text-[#00E5FF] border border-[#00E5FF]/40 rounded-lg text-[9px] font-bold shrink-0 active:scale-95 transition-all"
+              >
+                {selectableTracks.every((t) => selectedIds.has(t.id))
+                  ? 'СБРОСИТЬ'
+                  : 'ВЫБРАТЬ ВСЕ'}
+              </button>
+            )}
           </div>
         </div>
 
-        {/* File List */}
+        {/* Tracks List from Player Library */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-          {filteredFiles.length === 0 ? (
+          {availableTracks.length === 0 ? (
             <div className="py-12 text-center text-[#883344] space-y-2">
-              <Cpu className="w-8 h-8 mx-auto opacity-40 text-[#FF1A3C]" />
-              <p className="text-xs">[ АУДИОФАЙЛЫ НЕ ОБНАРУЖЕНЫ ]</p>
-              <p className="text-[10px]">
-                Нажмите «ОБНОВИТЬ» для сканирования папки Download
+              <Music2 className="w-8 h-8 mx-auto opacity-40 text-[#FF1A3C]" />
+              <p className="text-xs font-bold">[ МЕДИАТЕКА ПЛЕЕРА ПУСТА ]</p>
+              <p className="text-[9px] text-[#662233] max-w-xs mx-auto">
+                Сначала загрузите треки в плеер через вкладку «МЕДИАТЕКА» (сканированием или загрузкой файлов)
               </p>
             </div>
+          ) : filteredTracks.length === 0 ? (
+            <div className="py-10 text-center text-[#883344] space-y-1.5">
+              <p className="text-xs">[ ТРЕКИ НЕ НАЙДЕНЫ ]</p>
+              <p className="text-[9px] text-[#662233]">Измените параметры поиска или фильтр</p>
+            </div>
           ) : (
-            filteredFiles.map((file) => {
-              const isChecked = selectedPaths.has(file.path);
-              const isPreviewing = previewingPath === file.path;
+            filteredTracks.map((track) => {
+              const isAlreadyInPlaylist = existingSet.has(track.id);
+              const isChecked = selectedIds.has(track.id);
+              const isPreviewing = previewingId === track.id;
 
               return (
                 <div
-                  key={file.path}
-                  onClick={() => toggleSelectTrack(file.path)}
+                  key={track.id}
+                  onClick={() => {
+                    if (!isAlreadyInPlaylist) {
+                      toggleSelectTrack(track.id);
+                    }
+                  }}
                   className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border ${
-                    isChecked
-                      ? 'bg-[#1C040E] border-[#FF1A3C] shadow-[0_0_8px_rgba(255,26,60,0.3)]'
-                      : 'bg-[#120308] border-[#FF1A3C]/25 hover:border-[#FF1A3C]/60'
+                    isAlreadyInPlaylist
+                      ? 'bg-[#14040A]/60 border-[#FF1A3C]/20 opacity-70 cursor-default'
+                      : isChecked
+                      ? 'bg-[#1F0410] border-[#00E5FF] shadow-[0_0_10px_rgba(0,229,255,0.25)]'
+                      : 'bg-[#120308] border-[#FF1A3C]/30 hover:border-[#FF1A3C]/70'
                   }`}
                 >
-                  {/* Left: Play/Stop Button & Metadata */}
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                  {/* Left: Preview button, Cover, Info */}
+                  <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
                     <button
                       type="button"
-                      onClick={(e) => handlePlayPreview(e, file)}
+                      onClick={(e) => handlePlayPreview(e, track)}
                       title={isPreviewing ? 'Остановить' : 'Прослушать'}
                       className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all border ${
                         isPreviewing
@@ -221,40 +283,56 @@ export const AddTracksToPlaylistModal: React.FC<AddTracksToPlaylistModalProps> =
                       )}
                     </button>
 
+                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#0A0206] shrink-0 border border-[#FF1A3C]/30">
+                      <CyberCoverImage
+                        src={track.coverUrl}
+                        alt={track.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
                     <div className="min-w-0 flex-1">
-                      <h4 className={`text-xs font-bold truncate ${
-                        isChecked ? 'text-[#00E5FF]' : 'text-white'
-                      }`}>
-                        {file.title || file.name}
+                      <h4
+                        className={`text-xs font-bold truncate ${
+                          isChecked ? 'text-[#00E5FF]' : 'text-white'
+                        }`}
+                      >
+                        {track.title}
                       </h4>
 
                       <div className="flex items-center gap-1.5 mt-0.5 text-[9px] text-[#883344]">
-                        <span className="truncate max-w-[120px]">
-                          {file.artist || 'Неизвестен'}
-                        </span>
+                        <span className="truncate max-w-[110px]">{track.artist}</span>
                         <span>•</span>
                         <span className="px-1 py-0.2 rounded font-bold text-[8px] bg-[#FF1A3C]/20 text-[#FF1A3C] border border-[#FF1A3C]/40">
-                          {file.hiResInfo.format}
+                          {track.hiResInfo?.format || 'AUDIO'}
                         </span>
                         <span>•</span>
-                        <span>{formatDuration(file.durationSec)}</span>
+                        <span>{formatDuration(track.duration)}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Right: Checkbox */}
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSelectTrack(file.path);
-                    }}
-                    className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
-                      isChecked
-                        ? 'bg-[#FF1A3C] border-[#FF1A3C] text-black shadow-[0_0_6px_#FF1A3C]'
-                        : 'bg-[#080104] border-[#FF1A3C]/40 text-transparent'
-                    }`}
-                  >
-                    <Check className={`w-3.5 h-3.5 stroke-[3] ${isChecked ? 'block' : 'hidden'}`} />
+                  {/* Right: Status badge or Checkbox */}
+                  <div className="shrink-0 flex items-center gap-2">
+                    {isAlreadyInPlaylist ? (
+                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30">
+                        В ШАРДЕ
+                      </span>
+                    ) : (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectTrack(track.id);
+                        }}
+                        className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                          isChecked
+                            ? 'bg-[#00E5FF] border-[#00E5FF] text-black shadow-[0_0_6px_#00E5FF]'
+                            : 'bg-[#080104] border-[#FF1A3C]/40 text-transparent hover:border-[#FF1A3C]'
+                        }`}
+                      >
+                        <Check className={`w-3.5 h-3.5 stroke-[3] ${isChecked ? 'block' : 'hidden'}`} />
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -265,9 +343,9 @@ export const AddTracksToPlaylistModal: React.FC<AddTracksToPlaylistModalProps> =
         {/* Footer */}
         <div className="p-3 bg-[#18040C] border-t border-[#FF1A3C]/40 flex items-center justify-between shrink-0">
           <div className="text-[10px] text-[#883344]">
-            ВЫБРАНО:{' '}
+            ВЫБРАНО ДЛЯ ДОБАВЛЕНИЯ:{' '}
             <span className="font-black text-[#00E5FF] ml-1">
-              {selectedPaths.size}
+              {selectedIds.size}
             </span>
           </div>
 
@@ -281,11 +359,11 @@ export const AddTracksToPlaylistModal: React.FC<AddTracksToPlaylistModalProps> =
 
             <button
               onClick={handleSave}
-              disabled={selectedPaths.size === 0}
-              className="px-4 py-1.5 rounded-lg bg-[#FF1A3C] hover:bg-[#FF0033] text-black font-black text-[10px] flex items-center gap-1 shadow-[0_0_10px_rgba(255,26,60,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={selectedIds.size === 0}
+              className="px-4 py-1.5 rounded-lg bg-[#FF1A3C] hover:bg-[#FF0033] text-black font-black text-[10px] flex items-center gap-1 shadow-[0_0_10px_rgba(255,26,60,0.6)] disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>СОХРАНИТЬ В ШАРД</span>
+              <span>ДОБАВИТЬ В ШАРД (+{selectedIds.size})</span>
             </button>
           </div>
         </div>

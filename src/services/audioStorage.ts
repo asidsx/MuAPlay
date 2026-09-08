@@ -205,3 +205,12 @@ export async function deleteAudioBlob(trackId: string): Promise<void> {
     console.warn('Failed to delete audio blob from IndexedDB:', err);
   }
 }
+
+export async function getPlayableTrackUrl(track: { id: string; url?: string; filePath?: string }): Promise<string | null> {
+  const storedUrl = await getAudioBlobUrl(track.id);
+  if (storedUrl) return storedUrl;
+  if (track.url) return track.url;
+  return null;
+}
+
+

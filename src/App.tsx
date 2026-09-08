@@ -704,60 +704,66 @@ export default function App() {
     setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
   };
 
-  // Add tracks to playlist (Called from AddTracksToPlaylistModal)
-  const handleAddTracksToPlaylist = (playlistId: string, selectedFiles: ScannedFile[]) => {
-    // 1. Ensure all selected files exist in `tracks` library
-    const newTracksToAdd: Track[] = [];
-
-    selectedFiles.forEach((file) => {
-      let existing = tracks.find((t) => t.filePath === file.path || t.title === file.title);
-      if (!existing) {
-        existing = {
-          id: `track-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          title: file.title || file.name,
-          artist: file.artist || 'Неизвестный исполнитель',
-          album: file.album || 'Папка Загрузки',
-          duration: file.durationSec,
-          url: file.previewUrl,
-          coverUrl: file.coverUrl,
-          filePath: file.path,
-          fileSize: file.size,
-          hiResInfo: file.hiResInfo,
-          year: '2026',
-          genre: 'Local',
-          isFavorite: false,
-          addedAt: Date.now(),
-        };
-        newTracksToAdd.push(existing);
-      }
-    });
-
-    if (newTracksToAdd.length > 0) {
-      setTracks((prev) => [...prev, ...newTracksToAdd]);
-    }
-
-    // 2. Map track IDs to the playlist
-    const addedTrackIds = selectedFiles.map((file) => {
-      const match = [...tracks, ...newTracksToAdd].find(
-        (t) => t.filePath === file.path || t.title === file.title
-      );
-      return match ? match.id : null;
-    }).filter((id): id is string => id !== null);
-
+  // Add tracks to playlist from player library
+  const handleAddTracksToPlaylist = (playlistId: string, selectedTrackIds: string[]) => {
     setPlaylists((prev) =>
       prev.map((p) => {
         if (p.id === playlistId) {
-          const uniqueIds = Array.from(new Set([...p.trackIds, ...addedTrackIds]));
+          const uniqueIds = Array.from(new Set([...p.trackIds, ...selectedTrackIds]));
+          const firstTrack = tracks.find((t) => t.id === uniqueIds[0]);
           return {
             ...p,
             trackIds: uniqueIds,
-            coverUrl: selectedFiles[0]?.coverUrl || p.coverUrl,
+            coverUrl: p.coverUrl || firstTrack?.coverUrl,
             updatedAt: Date.now(),
           };
         }
         return p;
       })
     );
+    const targetPl = playlists.find((p) => p.id === playlistId);
+    setFileAlert(`[ ШАРД ] В «${targetPl?.name || 'Плейлист'}» добавлено +${selectedTrackIds.length} треков`);
+    setTimeout(() => setFileAlert(null), 2500);
+  };
+
+  // Play playlist and automatically populate upcoming queue with playlist tracks
+  const handlePlayPlaylist = (playlist: Playlist, startIndex = 0, shuffle = false) => {
+    const playlistTracks = playlist.trackIds
+      .map((id) => tracks.find((t) => t.id === id))
+      .filter((t): t is Track => t !== undefined);
+
+    if (playlistTracks.length === 0) {
+      setFileAlert(`[ ШАРД ПУСТ ] В «${playlist.name}» нет треков`);
+      setTimeout(() => setFileAlert(null), 2500);
+      return;
+    }
+
+    let orderedTracks = [...playlistTracks];
+    let firstTrack: Track;
+
+    if (shuffle) {
+      orderedTracks = [...playlistTracks].sort(() => Math.random() - 0.5);
+      firstTrack = orderedTracks[0];
+      const upcoming = orderedTracks.slice(1).map((t, idx) => ({
+        ...t,
+        queueId: `q-pl-${playlist.id}-${t.id}-${Date.now()}-${idx}`,
+      }));
+      setUserQueue(upcoming);
+    } else {
+      const validIndex = Math.max(0, Math.min(startIndex, orderedTracks.length - 1));
+      firstTrack = orderedTracks[validIndex];
+      const nextTracks = orderedTracks.slice(validIndex + 1);
+      const prevTracks = orderedTracks.slice(0, validIndex);
+      const upcoming = [...nextTracks, ...prevTracks].map((t, idx) => ({
+        ...t,
+        queueId: `q-pl-${playlist.id}-${t.id}-${Date.now()}-${idx}`,
+      }));
+      setUserQueue(upcoming);
+    }
+
+    handlePlayTrack(firstTrack);
+    setFileAlert(`[ ОЧЕРЕДЬ ШАРДА ] Загружено ${playlistTracks.length} треков из «${playlist.name}»`);
+    setTimeout(() => setFileAlert(null), 2500);
   };
 
   const handleRemoveTrackFromPlaylist = (playlistId: string, trackId: string) => {
@@ -1365,14 +1371,12 @@ export default function App() {
             currentTrackId={currentTrackId}
             isPlaying={isPlaying}
             onPlayTrack={handlePlayTrack}
+            onPlayPlaylist={handlePlayPlaylist}
             onCreatePlaylist={handleCreatePlaylist}
             onDeletePlaylist={handleDeletePlaylist}
             onAddTracksToPlaylist={handleAddTracksToPlaylist}
             onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
             onImportPlaylist={handleImportPlaylist}
-            availableDownloads={downloadFiles}
-            onRescanDownloads={handleScanDownloadsFolder}
-            isScanning={isScanningDownloads}
           />
         )}
 
