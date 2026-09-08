@@ -328,15 +328,34 @@ export default function App() {
     }
   };
 
+  const lastPrevClickRef = useRef<number>(0);
+
   const handlePrevTrack = () => {
     if (tracks.length === 0) return;
-    const activeId = currentTrackId || currentTrack?.id;
-    const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : 0;
-    const effectiveIndex = currentIndex === -1 ? 0 : currentIndex;
-    const prevIndex = (effectiveIndex - 1 + tracks.length) % tracks.length;
-    const prevTrack = tracks[prevIndex];
-    if (prevTrack) {
-      handlePlayTrack(prevTrack);
+
+    const audio = audioEngine.getAudioElement();
+    const curAudioTime = audio ? audio.currentTime : currentTime;
+    const now = Date.now();
+    const timeSinceLastPrev = now - lastPrevClickRef.current;
+
+    // Temporal trigger: 3 seconds (3000ms)
+    // If track is past 3 seconds AND last "Prev" click was not within 3 seconds:
+    // First press rewinds track to beginning (0s)
+    // Second press within 3 seconds (or if track is at < 3s) jumps to previous track
+    if (curAudioTime > 3 && timeSinceLastPrev > 3000) {
+      audioEngine.seek(0);
+      setCurrentTime(0);
+      lastPrevClickRef.current = now;
+    } else {
+      lastPrevClickRef.current = 0;
+      const activeId = currentTrackId || currentTrack?.id;
+      const currentIndex = activeId ? tracks.findIndex((t) => t.id === activeId) : 0;
+      const effectiveIndex = currentIndex === -1 ? 0 : currentIndex;
+      const prevIndex = (effectiveIndex - 1 + tracks.length) % tracks.length;
+      const prevTrack = tracks[prevIndex];
+      if (prevTrack) {
+        handlePlayTrack(prevTrack);
+      }
     }
   };
 
